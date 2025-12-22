@@ -51,6 +51,12 @@ To automate downloading transaction history, you first need to log in to E-Trade
     ```
     This will scrape the orders history (starting from 12/22/19) and save it to `input/orders/orders.xlsx`.
 
+5.  Run the RSU confirmation download script:
+    ```bash
+    uv run src/tax_engine/etrade_download_rsu.py
+    ```
+    This will download the RSU release confirmation PDFs (starting from 12/22/19) and save them to `input/rsu/`. It skips files that have already been downloaded.
+
 **Note:** Excel parsing is not yet implemented. The main.py file is ready to load data from `input/espp/BenefitHistory.xlsx` once the parsing logic is added.
 
 ---

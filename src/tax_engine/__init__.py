@@ -18,6 +18,7 @@ from .sample_data import (
     create_sample_events_with_manual_fx,
     create_sample_events_with_ecb_rates,
 )
+from .rsu_parser import load_rsu_events
 
 __version__ = "0.1.0"
 

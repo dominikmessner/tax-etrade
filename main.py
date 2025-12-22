@@ -21,6 +21,7 @@ from tax_engine import (
     TaxEngine,
     StockEvent,
     EventType,
+    load_rsu_events,
 )
 
 
@@ -139,10 +140,19 @@ def main():
     
     espp_events = load_events_from_excel()
     sell_events = load_orders_from_excel()
+    rsu_events = load_rsu_events()
     
     # Combine and sort all events
-    events = espp_events + sell_events
-    events.sort(key=lambda x: x.event_date)
+    events = espp_events + sell_events + rsu_events
+    
+    # Sort by date, then by event type (BUY/VEST before SELL) to handle same-day transactions
+    # We want VEST/BUY to happen before SELL so we have inventory to sell
+    def event_sort_key(event):
+        # Priority: VEST/BUY = 0, SELL = 1
+        type_priority = 1 if event.event_type == EventType.SELL else 0
+        return (event.event_date, type_priority)
+        
+    events.sort(key=event_sort_key)
     
     # Pre-fetch all ECB rates in one API call (more efficient)
     prefetch_ecb_rates(events)

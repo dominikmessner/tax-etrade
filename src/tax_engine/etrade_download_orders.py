@@ -81,10 +81,16 @@ def download_orders():
                 continue
                 
             # Indices (0-based from locator list):
+            # Benefit Type: 1
             # Order Date: 2
             # Sold Qty: 8
             # Execution Price: 9
             
+            benefit_type = cells[1].inner_text().strip()
+            if "Stock Options" in benefit_type:
+                print(f"Skipping Stock Options order on {cells[2].inner_text().strip()}")
+                continue
+
             order_date = cells[2].inner_text().strip()
             sold_qty = cells[8].inner_text().strip()
             exec_price = cells[9].inner_text().strip()
@@ -96,7 +102,8 @@ def download_orders():
             data.append({
                 "Order Date": order_date,
                 "Sold Qty.": sold_qty,
-                "Execution Price": exec_price
+                "Execution Price": exec_price,
+                "Benefit Type": benefit_type
             })
             
         print(f"Extracted {len(data)} records.")
