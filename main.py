@@ -7,25 +7,69 @@ Calculates capital gains tax using the Austrian moving average cost basis method
 Main entry point for the application.
 """
 
+from datetime import datetime
+from decimal import Decimal
 from pathlib import Path
+import pandas as pd
+
 from tax_engine import (
     prefetch_ecb_rates,
     TaxEngine,
+    StockEvent,
+    EventType,
 )
 
 
 def load_events_from_excel():
     """
     Load stock events from the BenefitHistory.xlsx file.
-    
-    TODO: Implement Excel parsing to extract stock events.
-    This should parse the ESPP data and create StockEvent objects.
     """
-    # Placeholder - to be implemented
-    raise NotImplementedError(
-        "Excel parsing not yet implemented. "
-        "See tests/test_sample_data.py for the sample data example."
-    )
+    excel_path = Path("input/espp/BenefitHistory.xlsx")
+    
+    # Read the ESPP sheet
+    # The user mentioned the sheet is named "ESPP"
+    try:
+        df = pd.read_excel(excel_path, sheet_name="ESPP")
+    except ValueError:
+        print("Warning: Sheet 'ESPP' not found, attempting to read the first sheet.")
+        df = pd.read_excel(excel_path, sheet_name=0)
+    
+    events = []
+    
+    for _, row in df.iterrows():
+        # Filter for Purchase events
+        if row.get("Record Type") != "Purchase":
+            continue
+            
+        # Parse date
+        # Format in Excel is like "05-DEC-2022"
+        raw_date = row["Purchase Date"]
+        if hasattr(raw_date, "date"):
+            event_date = raw_date.date()
+        else:
+            event_date = datetime.strptime(str(raw_date).strip(), "%d-%b-%Y").date()
+            
+        # Parse quantity
+        shares = Decimal(str(row["Purchased Qty."]))
+        
+        # Parse price (FMV at purchase date)
+        # Format is like "$37.56"
+        price_str = str(row["Purchase Date FMV"]).replace("$", "").strip()
+        price_usd = Decimal(price_str)
+        
+        event = StockEvent(
+            event_date=event_date,
+            event_type=EventType.BUY,
+            shares=shares,
+            price_usd=price_usd,
+            notes="ESPP Purchase"
+        )
+        events.append(event)
+        
+    # Sort events by date
+    events.sort(key=lambda x: x.event_date)
+    
+    return events
 
 
 def main():
