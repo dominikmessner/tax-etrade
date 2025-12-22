@@ -11,6 +11,11 @@ dependencies = [
     "requests>=2.32.5",
 ]
 
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0.0",
+]
+
 [tool.setuptools]
 package-dir = {"" = "src"}
 

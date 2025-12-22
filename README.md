@@ -1,3 +1,33 @@
+# Austrian Tax Engine for E-Trade RSUs and ESPP
+
+Calculates capital gains tax using the Austrian moving average cost basis method (Gleitender Durchschnittspreis) for stocks acquired through RSU vesting and ESPP purchases.
+
+## Quick Start
+
+### Run Demo with Sample Data
+
+To see the tax engine in action with the original sample data:
+
+```bash
+# Quick demo (shows full output)
+uv run demo.py
+
+# Or run tests
+uv run pytest tests/ -v
+```
+
+The [demo.py](demo.py) script and [tests/test_sample_data.py](tests/test_sample_data.py) preserve the original example that demonstrates the engine's calculations.
+
+### Run with Actual Data
+
+```bash
+uv run main.py
+```
+
+**Note:** Excel parsing is not yet implemented. The main.py file is ready to load data from `input/espp/BenefitHistory.xlsx` once the parsing logic is added.
+
+---
+
 # Core logic
 
 Your spreadsheet is basically the "Golden Record" the Finanzamt wants to see. It’s slightly more complex than it needs to be because you're tracking "Cost Change" and "Total Portfolio Cost," but honestly, having that trail makes an audit way easier.
