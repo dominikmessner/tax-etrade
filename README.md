@@ -24,6 +24,33 @@ The [demo.py](demo.py) script and [tests/test_sample_data.py](tests/test_sample_
 uv run main.py
 ```
 
+### E-Trade Automation (Login)
+
+To automate downloading transaction history, you first need to log in to E-Trade and cache the session.
+
+1.  Install Playwright browsers (first time only):
+    ```bash
+    uv run playwright install chromium
+    ```
+
+2.  Run the login script:
+    ```bash
+    uv run src/tax_engine/etrade_login.py
+    ```
+    This will open a browser window. Log in to E-Trade manually. Once you reach the Stock Plan page, the script will save your session to `etrade_session.json` and close.
+
+3.  Run the download script:
+    ```bash
+    uv run src/tax_engine/etrade_download_espp.py
+    ```
+    This will use the saved session to download the "Expanded" Benefit History and save it to `input/espp/BenefitHistory.xlsx`. If a file already exists, it will be backed up with a timestamp.
+
+4.  Run the orders download script:
+    ```bash
+    uv run src/tax_engine/etrade_download_orders.py
+    ```
+    This will scrape the orders history (starting from 12/22/19) and save it to `input/orders/orders.xlsx`.
+
 **Note:** Excel parsing is not yet implemented. The main.py file is ready to load data from `input/espp/BenefitHistory.xlsx` once the parsing logic is added.
 
 ---

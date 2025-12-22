@@ -10,7 +10,11 @@ Main entry point for the application.
 from datetime import datetime
 from decimal import Decimal
 from pathlib import Path
+import sys
 import pandas as pd
+
+# Add src to python path
+sys.path.append("src")
 
 from tax_engine import (
     prefetch_ecb_rates,
@@ -72,6 +76,54 @@ def load_events_from_excel():
     return events
 
 
+def load_orders_from_excel():
+    """
+    Load sell orders from the orders.xlsx file.
+    """
+    excel_path = Path("input/orders/orders.xlsx")
+    if not excel_path.exists():
+        print(f"Warning: {excel_path} not found. No sell orders loaded.")
+        return []
+
+    df = pd.read_excel(excel_path)
+    events = []
+
+    for _, row in df.iterrows():
+        # Parse date
+        raw_date = row["Order Date"]
+        if hasattr(raw_date, "date"):
+            event_date = raw_date.date()
+        else:
+            # Format is MM/DD/YYYY (e.g. 12/22/2019)
+            try:
+                event_date = datetime.strptime(str(raw_date).strip(), "%m/%d/%Y").date()
+            except ValueError:
+                # Try alternate format just in case
+                try:
+                    event_date = datetime.strptime(str(raw_date).strip(), "%Y-%m-%d").date()
+                except ValueError:
+                    print(f"Error parsing date: {raw_date}")
+                    continue
+
+        # Parse quantity
+        shares = Decimal(str(row["Sold Qty."]))
+        
+        # Parse price
+        price_str = str(row["Execution Price"]).replace("$", "").replace(",", "").strip()
+        price_usd = Decimal(price_str)
+
+        event = StockEvent(
+            event_date=event_date,
+            event_type=EventType.SELL,
+            shares=shares,
+            price_usd=price_usd,
+            notes="Sell Order"
+        )
+        events.append(event)
+    
+    return events
+
+
 def main():
     """Run the tax engine with actual data from Excel files."""
     print("Austrian Tax Engine for E-Trade RSUs and ESPP")
@@ -85,7 +137,12 @@ def main():
         print("\nTo run the sample example, use: uv run pytest tests/test_sample_data.py -v -s")
         return
     
-    events = load_events_from_excel()
+    espp_events = load_events_from_excel()
+    sell_events = load_orders_from_excel()
+    
+    # Combine and sort all events
+    events = espp_events + sell_events
+    events.sort(key=lambda x: x.event_date)
     
     # Pre-fetch all ECB rates in one API call (more efficient)
     prefetch_ecb_rates(events)
