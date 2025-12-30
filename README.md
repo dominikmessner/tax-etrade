@@ -46,3 +46,5 @@ Once your data is in the `input/` directory:
 ```bash
 uv run main.py
 ```
+
+It will generate a pdf file tax_report_*.pdf

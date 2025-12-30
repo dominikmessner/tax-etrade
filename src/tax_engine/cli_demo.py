@@ -5,6 +5,7 @@ This script demonstrates the tax engine functionality using the sample data
 that was previously in main.py. Use this to see the example calculations.
 """
 
+from datetime import datetime
 from tax_engine import (
     prefetch_ecb_rates,
     TaxEngine,
@@ -36,6 +37,13 @@ def main():
     print(f"\nCurrent Position: {engine.state.total_shares} shares")
     print(f"Current Avg Cost: €{engine.state.avg_cost_eur:,.4f}")
     print(f"Total Portfolio Cost: €{engine.state.total_portfolio_cost_eur:,.4f}")
+
+    # Generate PDF report
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    pdf_path = f"tax_report_demo_{timestamp}.pdf"
+    print(f"Generating PDF report at: {pdf_path}...")
+    engine.generate_pdf_report(pdf_path)
+    print("PDF generation complete.")
 
 
 if __name__ == "__main__":

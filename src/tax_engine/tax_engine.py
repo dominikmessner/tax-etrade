@@ -8,6 +8,7 @@ required by Austrian tax law for calculating capital gains on stocks.
 from decimal import Decimal, ROUND_HALF_UP
 from typing import Optional
 from collections import defaultdict
+from datetime import date
 
 from .models import (
     EventType,
@@ -207,14 +208,15 @@ class TaxEngine:
         
         for pe in self.processed_events:
             e = pe.event
-            shares_str = f"+{e.shares}" if e.event_type != EventType.SELL else f"-{e.shares}"
+            shares_sign = "+" if e.event_type != EventType.SELL else "-"
+            shares_str = f"{shares_sign}{e.shares:,.0f}"
             gain_str = f"€{pe.realized_gain_loss:,.4f}" if pe.realized_gain_loss != 0 else ""
             
             print(
                 f"{e.event_date.isoformat():<12} {e.event_type.value:<6} "
                 f"{shares_str:>10} ${e.price_usd:>11,.2f} "
                 f"{e.resolved_fx_rate:>10.4f} €{e.price_eur:>11,.4f} "
-                f"{pe.total_shares_after:>10} €{pe.avg_cost_eur_after:>11,.4f} "
+                f"{pe.total_shares_after:>10,.0f} €{pe.avg_cost_eur_after:>11,.4f} "
                 f"{gain_str:>12}"
             )
         
@@ -239,3 +241,132 @@ class TaxEngine:
             )
         
         print("=" * 80)
+
+    def generate_html_content(self) -> str:
+        """Generate HTML content for the tax report."""
+        html = []
+        html.append("<html><head><style>")
+        html.append("body { font-family: sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; }")
+        html.append("table { border-collapse: collapse; width: 100%; margin-bottom: 20px; font-size: 12px; }")
+        html.append("th, td { border: 1px solid #ddd; padding: 6px; text-align: left; }")
+        html.append("th { background-color: #f2f2f2; }")
+        html.append("h1, h2, h3 { color: #333; }")
+        html.append(".gain { color: green; }")
+        html.append(".loss { color: red; }")
+        html.append("code { background-color: #f4f4f4; padding: 2px 4px; border-radius: 4px; }")
+        html.append("</style></head><body>")
+        
+        html.append("<h1>Austrian Tax Report</h1>")
+        html.append(f"<p>Generated on: {date.today().isoformat()}</p>")
+        
+        html.append("<h2>Methodology</h2>")
+        html.append("<p>This report calculates capital gains using the <strong>Moving Average Cost Basis</strong> (Gleitender Durchschnittspreis) method as required by Austrian tax law.</p>")
+        html.append("<h3>Key Rules:</h3>")
+        html.append("<ul>")
+        html.append("<li><strong>Acquisitions (VEST/BUY)</strong>: Recalculate the moving average cost.<br><code>New Avg = (Old Total Cost + New Cost) / (Old Shares + New Shares)</code></li>")
+        html.append("<li><strong>Sales (SELL)</strong>: Do not change the average cost per share.<br><code>Realized Gain/Loss = (Sell Price - Avg Cost) * Shares Sold</code></li>")
+        html.append("<li><strong>Currency</strong>: All values are converted to EUR using the daily ECB reference rate.</li>")
+        html.append("</ul>")
+        
+        html.append("<h2>Yearly Tax Summary</h2>")
+        html.append("<table>")
+        html.append("<tr><th>Year</th><th>Total Gains</th><th>Total Losses</th><th>Net Gain/Loss</th><th>Taxable Amount</th><th>KESt Due (27.5%)</th></tr>")
+        
+        for summary in self.get_all_yearly_summaries():
+            net_style = "gain" if summary.net_gain_loss >= 0 else "loss"
+            html.append(f"<tr>")
+            html.append(f"<td>{summary.year}</td>")
+            html.append(f"<td>€{summary.total_gains:,.2f}</td>")
+            html.append(f"<td>€{summary.total_losses:,.2f}</td>")
+            html.append(f"<td class='{net_style}'><strong>€{summary.net_gain_loss:,.2f}</strong></td>")
+            html.append(f"<td>€{summary.taxable_gain:,.2f}</td>")
+            html.append(f"<td><strong>€{summary.kest_due:,.2f}</strong></td>")
+            html.append(f"</tr>")
+        html.append("</table>")
+        
+        html.append("<h2>Detailed Transaction Ledger</h2>")
+        html.append("<p>The following table documents every transaction and its effect on the portfolio cost basis.</p>")
+        
+        html.append("<table>")
+        html.append("<tr><th>Date</th><th>Type</th><th>Shares</th><th>Price (USD)</th><th>FX Rate</th><th>Price (EUR)</th><th>Total Value (EUR)</th><th>Portfolio Qty</th><th>Avg Cost (EUR)</th><th>Realized G/L (EUR)</th></tr>")
+        
+        for pe in self.processed_events:
+            e = pe.event
+            shares_sign = "+" if e.event_type != EventType.SELL else "-"
+            shares_str = f"{shares_sign}{e.shares:,.0f}"
+            
+            gl_str = ""
+            if pe.realized_gain_loss != 0:
+                gl_str = f"<strong>€{pe.realized_gain_loss:,.2f}</strong>"
+            elif e.event_type == EventType.SELL:
+                gl_str = "€0.00"
+                
+            html.append("<tr>")
+            html.append(f"<td>{e.event_date}</td>")
+            html.append(f"<td>{e.event_type.value}</td>")
+            html.append(f"<td>{shares_str}</td>")
+            html.append(f"<td>${e.price_usd:,.2f}</td>")
+            html.append(f"<td>{e.resolved_fx_rate:.4f}</td>")
+            html.append(f"<td>€{e.price_eur:,.4f}</td>")
+            html.append(f"<td>€{e.total_value_eur:,.2f}</td>")
+            html.append(f"<td>{pe.total_shares_after:,.0f}</td>")
+            html.append(f"<td>€{pe.avg_cost_eur_after:,.4f}</td>")
+            html.append(f"<td>{gl_str}</td>")
+            html.append("</tr>")
+        html.append("</table>")
+        
+        html.append("<h2>Calculation Details for Sales</h2>")
+        html.append("<p>For every SELL transaction, the gain/loss is calculated as follows:</p>")
+        
+        sell_events = [pe for pe in self.processed_events if pe.event.event_type == EventType.SELL]
+        if not sell_events:
+            html.append("<p><em>No sales transactions found.</em></p>")
+            
+        for i, pe in enumerate(sell_events, 1):
+            e = pe.event
+            if e.shares > 0:
+                avg_cost_used = e.price_eur - (pe.realized_gain_loss / e.shares)
+            else:
+                avg_cost_used = Decimal(0)
+                
+            html.append(f"<h3>{i}. Sale on {e.event_date}</h3>")
+            html.append("<ul>")
+            html.append(f"<li><strong>Sold</strong>: {e.shares:,.0f} shares @ €{e.price_eur:,.4f}</li>")
+            html.append(f"<li><strong>Average Cost Basis</strong>: €{avg_cost_used:,.4f}</li>")
+            html.append(f"<li><strong>Calculation</strong>: <code>({e.price_eur:,.4f} - {avg_cost_used:,.4f}) * {e.shares:,.0f} = {pe.realized_gain_loss:,.4f}</code></li>")
+            html.append(f"<li><strong>Realized Gain/Loss</strong>: <strong>€{pe.realized_gain_loss:,.2f}</strong></li>")
+            html.append("</ul>")
+            
+        html.append("</body></html>")
+        return "".join(html)
+
+    def generate_pdf_report(self, filepath: str):
+        """Generate a PDF tax report using Playwright."""
+        try:
+            from playwright.sync_api import sync_playwright
+        except ImportError:
+            print("Error: Playwright is not installed. Cannot generate PDF.")
+            print("Please install it with: pip install playwright && playwright install")
+            return
+
+        html_content = self.generate_html_content()
+        
+        try:
+            with sync_playwright() as p:
+                # Try to launch chromium, if it fails, it might need installation
+                try:
+                    browser = p.chromium.launch()
+                except Exception as e:
+                    print(f"Error launching browser: {e}")
+                    print("Attempting to install browsers...")
+                    import subprocess
+                    subprocess.run(["playwright", "install", "chromium"])
+                    browser = p.chromium.launch()
+
+                page = browser.new_page()
+                page.set_content(html_content)
+                page.pdf(path=filepath, format="A4", margin={"top": "2cm", "bottom": "2cm", "left": "2cm", "right": "2cm"})
+                browser.close()
+        except Exception as e:
+            print(f"Failed to generate PDF: {e}")
+

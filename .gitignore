@@ -12,3 +12,7 @@ wheels/
 input/
 
 .DS_Store
+
+# Generated reports
+*.pdf
+tax_report_*.md

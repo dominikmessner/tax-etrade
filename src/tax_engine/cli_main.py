@@ -166,6 +166,13 @@ def main():
     print(f"Current Avg Cost: €{engine.state.avg_cost_eur:,.4f}")
     print(f"Total Portfolio Cost: €{engine.state.total_portfolio_cost_eur:,.4f}")
 
+    # Generate PDF report
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    pdf_path = f"tax_report_{timestamp}.pdf"
+    print(f"Generating PDF report at: {pdf_path}...")
+    engine.generate_pdf_report(pdf_path)
+    print("PDF generation complete.")
+
 
 if __name__ == "__main__":
     main()
