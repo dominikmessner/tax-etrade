@@ -2,7 +2,25 @@
 
 Calculates capital gains tax using the Austrian moving average cost basis method (Gleitender Durchschnittspreis) for stocks acquired through RSU vesting and ESPP purchases.
 
-## Quick Start
+## Easy Start (Mac Users)
+
+If you are not a developer, you can simply use the provided script:
+
+1.  Double-click the `run_tax_engine.command` file in this folder.
+2.  It will automatically set up Python, install dependencies, and open a menu.
+3.  Follow the menu options to Login, Download Data, and Calculate Tax.
+
+*Note: The first time you run it, you might need to right-click and select "Open" if macOS warns about an unidentified developer, or allow it in System Settings.*
+
+## Easy Start (Windows Users)
+
+If you are not a developer, you can simply use the provided script:
+
+1.  Double-click the `run_tax_engine.bat` file in this folder.
+2.  It will automatically set up Python, install dependencies, and open a menu.
+3.  Follow the menu options to Login, Download Data, and Calculate Tax.
+
+## Developer Quick Start
 
 ## 1. Setup environment
 
