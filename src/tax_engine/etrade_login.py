@@ -77,6 +77,9 @@ def login():
 
         print("Successfully on the Stock Plan page.")
         
+        # Ensure the input directory exists
+        os.makedirs(os.path.dirname(SESSION_FILE), exist_ok=True)
+        
         # Save the session state
         context.storage_state(path=SESSION_FILE)
         print(f"Session saved to {SESSION_FILE}")

@@ -9,7 +9,8 @@ wheels/
 # Virtual environments
 .venv
 
-input/
+input/*
+!input/.gitkeep
 
 .DS_Store
 
