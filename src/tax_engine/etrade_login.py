@@ -7,16 +7,50 @@ TARGET_URL = "https://us.etrade.com/etx/sp/stockplan#/myAccount/benefitHistory"
 
 def login():
     with sync_playwright() as p:
-        # Launch browser in headful mode so user can interact
-        browser = p.chromium.launch(headless=False)
+        # Launch browser with anti-detection settings
+        browser = p.chromium.launch(
+            headless=False,
+            args=[
+                "--disable-blink-features=AutomationControlled",  # Hide automation flag
+                "--disable-infobars",  # Remove "Chrome is being controlled" bar
+                "--no-sandbox",
+                "--disable-dev-shm-usage",
+                "--disable-extensions",
+            ]
+        )
+        
+        # Common browser context settings to appear more human
+        context_options = {
+            "viewport": {"width": 1920, "height": 1080},
+            "user_agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+            "locale": "en-US",
+            "timezone_id": "America/New_York",
+        }
         
         # Load existing session if available
         if os.path.exists(SESSION_FILE):
             print(f"Loading session from {SESSION_FILE}")
-            context = browser.new_context(storage_state=SESSION_FILE)
+            context = browser.new_context(storage_state=SESSION_FILE, **context_options)
         else:
             print("Starting new session")
-            context = browser.new_context()
+            context = browser.new_context(**context_options)
+        
+        # Remove webdriver property to avoid detection
+        context.add_init_script("""
+            Object.defineProperty(navigator, 'webdriver', {
+                get: () => undefined
+            });
+            
+            // Override the plugins to appear more realistic
+            Object.defineProperty(navigator, 'plugins', {
+                get: () => [1, 2, 3, 4, 5]
+            });
+            
+            // Override languages
+            Object.defineProperty(navigator, 'languages', {
+                get: () => ['en-US', 'en']
+            });
+        """)
             
         page = context.new_page()
         
