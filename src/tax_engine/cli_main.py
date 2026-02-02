@@ -8,7 +8,7 @@ Main entry point for the application.
 """
 
 from datetime import datetime
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 from pathlib import Path
 import pandas as pd
 
@@ -103,8 +103,11 @@ def load_orders_from_excel():
                     continue
 
         # Parse quantity
-        shares = Decimal(str(row["Sold Qty."]))
-        
+        try:
+            shares = Decimal(str(row["Sold Qty."]))
+        except InvalidOperation:
+            continue
+
         # Parse price
         price_str = str(row["Execution Price"]).replace("$", "").replace(",", "").strip()
         price_usd = Decimal(price_str)
