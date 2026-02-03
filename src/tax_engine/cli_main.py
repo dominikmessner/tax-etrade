@@ -103,15 +103,17 @@ def load_orders_from_excel():
                     continue
 
         # Parse quantity
+        # row index + 1 for 0-based index, +1 for header row
+        printable_index = i + 2
         sold_qty_str = str(row["Sold Qty."]).strip()
         if sold_qty_str == "--":
-            print(f"Skipping row #{i}: canceled order")
+            print(f"Skipping row #{printable_index}: canceled order")
             continue
         
         try:
             shares = Decimal(sold_qty_str)
         except InvalidOperation:
-            print(f"Error parsing quantity in row #{i}: {sold_qty_str}")
+            print(f"Error parsing quantity in row #{printable_index}: {sold_qty_str}")
             continue
 
         # Parse price
