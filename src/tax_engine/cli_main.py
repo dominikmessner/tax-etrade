@@ -85,7 +85,7 @@ def load_orders_from_excel():
     df = pd.read_excel(excel_path)
     events = []
 
-    for _, row in df.iterrows():
+    for i, row in df.iterrows():
         # Parse date
         raw_date = row["Order Date"]
         if hasattr(raw_date, "date"):
@@ -103,9 +103,15 @@ def load_orders_from_excel():
                     continue
 
         # Parse quantity
+        sold_qty_str = str(row["Sold Qty."]).strip()
+        if sold_qty_str == "--":
+            print(f"Skipping row #{i}: canceled order")
+            continue
+        
         try:
-            shares = Decimal(str(row["Sold Qty."]))
+            shares = Decimal(sold_qty_str)
         except InvalidOperation:
+            print(f"Error parsing quantity in row #{i}: {sold_qty_str}")
             continue
 
         # Parse price
