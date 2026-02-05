@@ -80,8 +80,8 @@ class ECBRateFetcher:
             return cls._rate_cache[target_date]
 
         # Fetch a range around the target date to handle weekends/holidays
-        # Go back 10 days to ensure we get a rate
-        start_date = target_date - timedelta(days=10)
+        # Go back 14 days to handle extended holiday periods (e.g., Christmas + New Year)
+        start_date = target_date - timedelta(days=14)
         end_date = target_date
 
         rates = cls._fetch_rates_for_period(start_date, end_date)

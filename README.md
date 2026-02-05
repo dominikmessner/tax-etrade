@@ -2,6 +2,8 @@
 
 Calculates capital gains tax using the Austrian moving average cost basis method (Gleitender Durchschnittspreis) for stocks acquired through RSU vesting and ESPP purchases.
 
+> ⚠️ **DISCLAIMER**: This software is provided "as is", without warranty of any kind. **Use at your own risk.** The calculations are based on my understanding of Austrian tax law and may contain errors. This tool is not a substitute for professional tax advice. Always verify the results with a qualified tax advisor (Steuerberater) before filing your tax return. The author(s) assume no liability for any financial losses, penalties, or other damages arising from the use of this software.
+
 ## Easy Start (Mac Users)
 
 If you are not a developer, you can simply use the provided script:
@@ -67,3 +69,7 @@ uv run main.py
 ```
 
 It will generate a pdf file tax_report_*.pdf
+
+## How It Works
+
+For a detailed explanation of the tax calculation methodology, including the moving average cost basis formula, currency conversion, and practical examples, see the [Tax Calculation Method](docs/TAX_CALCULATION_METHOD.md) documentation.

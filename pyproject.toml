@@ -29,14 +29,14 @@ dev = [
 ]
 
 [project.scripts]
-tax-download-all = "tax_engine.download_all:main"
-tax-login = "tax_engine.etrade_login:login"
-tax-espp = "tax_engine.etrade_download_espp:download_benefit_history"
-tax-orders = "tax_engine.etrade_download_orders:download_orders"
-tax-rsu = "tax_engine.etrade_download_rsu:download_rsu_confirmations"
-tax-calc = "tax_engine.cli_main:main"
+# CLI entry points (installed as global commands)
+tax-engine = "tax_engine.cli_main:main"
 tax-demo = "tax_engine.cli_demo:main"
-tax-test = "tax_engine.run_tests:main"
+tax-login = "tax_engine.etrade_login:login"
+tax-download = "tax_engine.download_all:main"
+tax-download-espp = "tax_engine.etrade_download_espp:download_benefit_history"
+tax-download-orders = "tax_engine.etrade_download_orders:download_orders"
+tax-download-rsu = "tax_engine.etrade_download_rsu:download_rsu_confirmations"
 
 [tool.setuptools]
 package-dir = {"" = "src"}

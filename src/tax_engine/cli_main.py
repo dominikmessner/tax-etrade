@@ -38,26 +38,47 @@ def load_events_from_excel() -> list[StockEvent]:
 
     events = []
 
-    for _, row in df.iterrows():
+    for i, (_, row) in enumerate(df.iterrows()):
+        row_num = i + 2  # Excel row number (1-based + header)
+
         # Filter for Purchase events
         if row.get("Record Type") != "Purchase":
             continue
 
-        # Parse date
-        # Format in Excel is like "05-DEC-2022"
-        raw_date = row["Purchase Date"]
-        if hasattr(raw_date, "date"):
-            event_date = raw_date.date()
-        else:
-            event_date = datetime.strptime(str(raw_date).strip(), "%d-%b-%Y").date()
+        try:
+            # Parse date
+            # Format in Excel is like "05-DEC-2022"
+            raw_date = row["Purchase Date"]
+            if pd.isna(raw_date):
+                print(f"Warning: Empty purchase date in row {row_num}, skipping.")
+                continue
+            if hasattr(raw_date, "date"):
+                event_date = raw_date.date()
+            else:
+                event_date = datetime.strptime(str(raw_date).strip(), "%d-%b-%Y").date()
 
-        # Parse quantity
-        shares = Decimal(str(row["Purchased Qty."]).replace(",", ""))
+            # Parse quantity
+            qty_str = str(row["Purchased Qty."]).replace(",", "").strip()
+            if pd.isna(row["Purchased Qty."]) or qty_str in ("", "--", "N/A"):
+                print(f"Warning: Invalid quantity in row {row_num}, skipping.")
+                continue
+            shares = Decimal(qty_str)
 
-        # Parse price (FMV at purchase date)
-        # Format is like "$37.56"
-        price_str = str(row["Purchase Date FMV"]).replace("$", "").replace(",", "").strip()
-        price_usd = Decimal(price_str)
+            # Parse price (FMV at purchase date)
+            # Format is like "$37.56"
+            price_raw = row["Purchase Date FMV"]
+            if pd.isna(price_raw):
+                print(f"Warning: Empty price in row {row_num}, skipping.")
+                continue
+            price_str = str(price_raw).replace("$", "").replace(",", "").strip()
+            if price_str in ("", "--", "N/A"):
+                print(f"Warning: Invalid price '{price_raw}' in row {row_num}, skipping.")
+                continue
+            price_usd = Decimal(price_str)
+
+        except (ValueError, InvalidOperation) as e:
+            print(f"Error parsing ESPP row {row_num}: {e}")
+            continue
 
         event = StockEvent(
             event_date=event_date,

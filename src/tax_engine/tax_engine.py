@@ -136,7 +136,9 @@ class TaxEngine:
         self.state.total_portfolio_cost_eur -= cost_removed
 
         # Handle floating point edge case when selling all shares
-        if self.state.total_shares == 0:
+        # Also handle near-zero from rounding errors (e.g., 0.0000000001)
+        if self.state.total_shares <= Decimal("0.0001"):
+            self.state.total_shares = Decimal("0")
             self.state.avg_cost_eur = Decimal("0")
             self.state.total_portfolio_cost_eur = Decimal("0")
 

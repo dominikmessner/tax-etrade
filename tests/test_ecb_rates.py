@@ -291,8 +291,8 @@ class TestECBRateFetcherDateRange:
         # Check the URL that was called
         call_url = mock_urlopen.call_args[0][0]
         assert "2021-05-17" in call_url  # end date
-        # Start date should be ~10 days before
-        assert "2021-05-07" in call_url  # start date (10 days buffer)
+        # Start date should be ~14 days before
+        assert "2021-05-03" in call_url  # start date (14 days buffer)
 
     def test_handles_year_boundary(self):
         """Test rate fetching across year boundary."""

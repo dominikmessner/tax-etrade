@@ -67,13 +67,21 @@ class StockEvent:
         return (self.shares * self.price_eur).quantize(Decimal("0.0001"), ROUND_HALF_UP)
 
     def __post_init__(self) -> None:
-        """Convert numeric fields to Decimal if needed."""
+        """Convert numeric fields to Decimal if needed and validate."""
         if not isinstance(self.shares, Decimal):
             object.__setattr__(self, "shares", Decimal(str(self.shares)))
         if not isinstance(self.price_usd, Decimal):
             object.__setattr__(self, "price_usd", Decimal(str(self.price_usd)))
         if self.fx_rate is not None and not isinstance(self.fx_rate, Decimal):
             object.__setattr__(self, "fx_rate", Decimal(str(self.fx_rate)))
+
+        # Validate: shares and price must be positive
+        if self.shares <= 0:
+            raise ValueError(f"Shares must be positive, got {self.shares}")
+        if self.price_usd <= 0:
+            raise ValueError(f"Price must be positive, got {self.price_usd}")
+        if self.fx_rate is not None and self.fx_rate <= 0:
+            raise ValueError(f"FX rate must be positive, got {self.fx_rate}")
 
 
 @dataclass
