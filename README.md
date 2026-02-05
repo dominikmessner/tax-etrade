@@ -22,11 +22,12 @@ If you are not a developer, you can simply use the provided script:
 
 ## Developer Quick Start
 
-## 1. Setup environment
+### 1. Setup environment
 
 ```bash
 brew install uv
-uv sync
+uv sync --all-extras
+uv run pre-commit install
 ```
 
 ### 2. Run Demo

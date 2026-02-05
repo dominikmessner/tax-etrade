@@ -9,6 +9,10 @@ import urllib.request
 import xml.etree.ElementTree as ET
 from datetime import date, timedelta
 from decimal import ROUND_HALF_UP, Decimal
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from .models import StockEvent
 
 
 class ECBRateFetcher:
@@ -31,10 +35,7 @@ class ECBRateFetcher:
     @classmethod
     def _fetch_rates_for_period(cls, start_date: date, end_date: date) -> dict[date, Decimal]:
         """Fetch rates from ECB API for a date range."""
-        url = cls.ECB_API_URL.format(
-            start=start_date.isoformat(),
-            end=end_date.isoformat()
-        )
+        url = cls.ECB_API_URL.format(start=start_date.isoformat(), end=end_date.isoformat())
 
         try:
             with urllib.request.urlopen(url, timeout=30) as response:
@@ -51,9 +52,9 @@ class ECBRateFetcher:
 
         # Find all Obs (observation) elements
         for obs in root.iter():
-            if obs.tag.endswith('}Obs') or obs.tag == 'Obs':
-                time_period = obs.get('TIME_PERIOD')
-                obs_value = obs.get('OBS_VALUE')
+            if obs.tag.endswith("}Obs") or obs.tag == "Obs":
+                time_period = obs.get("TIME_PERIOD")
+                obs_value = obs.get("OBS_VALUE")
 
                 if time_period and obs_value:
                     rate_date = date.fromisoformat(time_period)
@@ -138,12 +139,12 @@ class ECBRateFetcher:
         return result
 
     @classmethod
-    def clear_cache(cls):
+    def clear_cache(cls) -> None:
         """Clear the rate cache."""
         cls._rate_cache.clear()
 
 
-def prefetch_ecb_rates(events: list) -> None:
+def prefetch_ecb_rates(events: list["StockEvent"]) -> None:
     """
     Pre-fetch ECB rates for all events that don't have fx_rate specified.
 

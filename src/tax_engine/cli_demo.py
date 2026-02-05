@@ -14,7 +14,7 @@ from tax_engine import (
 )
 
 
-def main():
+def main() -> None:
     """Run the tax engine with sample data using ECB rates."""
     print("Austrian Tax Engine for E-Trade RSUs and ESPP")
     print("Using Moving Average Cost Basis (Gleitender Durchschnittspreis)")

@@ -31,14 +31,14 @@ class TaxEngine:
     - Rule C: Cannot sell more shares than currently held (depot check)
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.state = TaxEngineState()
         self.processed_events: list[ProcessedEvent] = []
         self.yearly_summaries: dict[int, YearlyTaxSummary] = defaultdict(
             lambda: YearlyTaxSummary(year=0)
         )
 
-    def reset(self):
+    def reset(self) -> None:
         """Reset the engine to initial state."""
         self.state = TaxEngineState()
         self.processed_events = []
@@ -52,7 +52,8 @@ class TaxEngine:
         on the same day (common with sell-to-cover), the VEST must be
         processed first.
         """
-        def sort_key(event: StockEvent) -> tuple:
+
+        def sort_key(event: StockEvent) -> tuple[date, int]:
             # Primary: date
             # Secondary: event type priority (VEST=0, BUY=1, SELL=2)
             type_priority = {
@@ -193,7 +194,7 @@ class TaxEngine:
         """Get all yearly tax summaries, sorted by year."""
         return sorted(self.yearly_summaries.values(), key=lambda s: s.year)
 
-    def print_ledger(self):
+    def print_ledger(self) -> None:
         """Print the full transaction ledger in a readable format."""
         print("\n" + "=" * 120)
         print("TRANSACTION LEDGER")
@@ -221,7 +222,7 @@ class TaxEngine:
 
         print("=" * 120)
 
-    def print_tax_summary(self):
+    def print_tax_summary(self) -> None:
         """Print the yearly tax summary."""
         print("\n" + "=" * 80)
         print("YEARLY TAX SUMMARY")
@@ -245,8 +246,12 @@ class TaxEngine:
         """Generate HTML content for the tax report."""
         html = []
         html.append("<html><head><style>")
-        html.append("body { font-family: sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; }")
-        html.append("table { border-collapse: collapse; width: 100%; margin-bottom: 20px; font-size: 12px; }")
+        html.append(
+            "body { font-family: sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; }"
+        )
+        html.append(
+            "table { border-collapse: collapse; width: 100%; margin-bottom: 20px; font-size: 12px; }"
+        )
         html.append("th, td { border: 1px solid #ddd; padding: 6px; text-align: left; }")
         html.append("th { background-color: #f2f2f2; }")
         html.append("h1, h2, h3 { color: #333; }")
@@ -259,17 +264,27 @@ class TaxEngine:
         html.append(f"<p>Generated on: {date.today().isoformat()}</p>")
 
         html.append("<h2>Methodology</h2>")
-        html.append("<p>This report calculates capital gains using the <strong>Moving Average Cost Basis</strong> (Gleitender Durchschnittspreis) method as required by Austrian tax law.</p>")
+        html.append(
+            "<p>This report calculates capital gains using the <strong>Moving Average Cost Basis</strong> (Gleitender Durchschnittspreis) method as required by Austrian tax law.</p>"
+        )
         html.append("<h3>Key Rules:</h3>")
         html.append("<ul>")
-        html.append("<li><strong>Acquisitions (VEST/BUY)</strong>: Recalculate the moving average cost.<br><code>New Avg = (Old Total Cost + New Cost) / (Old Shares + New Shares)</code></li>")
-        html.append("<li><strong>Sales (SELL)</strong>: Do not change the average cost per share.<br><code>Realized Gain/Loss = (Sell Price - Avg Cost) * Shares Sold</code></li>")
-        html.append("<li><strong>Currency</strong>: All values are converted to EUR using the daily ECB reference rate.</li>")
+        html.append(
+            "<li><strong>Acquisitions (VEST/BUY)</strong>: Recalculate the moving average cost.<br><code>New Avg = (Old Total Cost + New Cost) / (Old Shares + New Shares)</code></li>"
+        )
+        html.append(
+            "<li><strong>Sales (SELL)</strong>: Do not change the average cost per share.<br><code>Realized Gain/Loss = (Sell Price - Avg Cost) * Shares Sold</code></li>"
+        )
+        html.append(
+            "<li><strong>Currency</strong>: All values are converted to EUR using the daily ECB reference rate.</li>"
+        )
         html.append("</ul>")
 
         html.append("<h2>Yearly Tax Summary</h2>")
         html.append("<table>")
-        html.append("<tr><th>Year</th><th>Total Gains</th><th>Total Losses</th><th>Net Gain/Loss</th><th>Taxable Amount</th><th>KESt Due (27.5%)</th></tr>")
+        html.append(
+            "<tr><th>Year</th><th>Total Gains</th><th>Total Losses</th><th>Net Gain/Loss</th><th>Taxable Amount</th><th>KESt Due (27.5%)</th></tr>"
+        )
 
         for summary in self.get_all_yearly_summaries():
             net_style = "gain" if summary.net_gain_loss >= 0 else "loss"
@@ -277,17 +292,23 @@ class TaxEngine:
             html.append(f"<td>{summary.year}</td>")
             html.append(f"<td>€{summary.total_gains:,.2f}</td>")
             html.append(f"<td>€{summary.total_losses:,.2f}</td>")
-            html.append(f"<td class='{net_style}'><strong>€{summary.net_gain_loss:,.2f}</strong></td>")
+            html.append(
+                f"<td class='{net_style}'><strong>€{summary.net_gain_loss:,.2f}</strong></td>"
+            )
             html.append(f"<td>€{summary.taxable_gain:,.2f}</td>")
             html.append(f"<td><strong>€{summary.kest_due:,.2f}</strong></td>")
             html.append("</tr>")
         html.append("</table>")
 
         html.append("<h2>Detailed Transaction Ledger</h2>")
-        html.append("<p>The following table documents every transaction and its effect on the portfolio cost basis.</p>")
+        html.append(
+            "<p>The following table documents every transaction and its effect on the portfolio cost basis.</p>"
+        )
 
         html.append("<table>")
-        html.append("<tr><th>Date</th><th>Type</th><th>Shares</th><th>Price (USD)</th><th>FX Rate</th><th>Price (EUR)</th><th>Total Value (EUR)</th><th>Portfolio Qty</th><th>Avg Cost (EUR)</th><th>Realized G/L (EUR)</th></tr>")
+        html.append(
+            "<tr><th>Date</th><th>Type</th><th>Shares</th><th>Price (USD)</th><th>FX Rate</th><th>Price (EUR)</th><th>Total Value (EUR)</th><th>Portfolio Qty</th><th>Avg Cost (EUR)</th><th>Realized G/L (EUR)</th></tr>"
+        )
 
         for pe in self.processed_events:
             e = pe.event
@@ -330,16 +351,22 @@ class TaxEngine:
 
             html.append(f"<h3>{i}. Sale on {e.event_date}</h3>")
             html.append("<ul>")
-            html.append(f"<li><strong>Sold</strong>: {e.shares:,.0f} shares @ €{e.price_eur:,.4f}</li>")
+            html.append(
+                f"<li><strong>Sold</strong>: {e.shares:,.0f} shares @ €{e.price_eur:,.4f}</li>"
+            )
             html.append(f"<li><strong>Average Cost Basis</strong>: €{avg_cost_used:,.4f}</li>")
-            html.append(f"<li><strong>Calculation</strong>: <code>({e.price_eur:,.4f} - {avg_cost_used:,.4f}) * {e.shares:,.0f} = {pe.realized_gain_loss:,.4f}</code></li>")
-            html.append(f"<li><strong>Realized Gain/Loss</strong>: <strong>€{pe.realized_gain_loss:,.2f}</strong></li>")
+            html.append(
+                f"<li><strong>Calculation</strong>: <code>({e.price_eur:,.4f} - {avg_cost_used:,.4f}) * {e.shares:,.0f} = {pe.realized_gain_loss:,.4f}</code></li>"
+            )
+            html.append(
+                f"<li><strong>Realized Gain/Loss</strong>: <strong>€{pe.realized_gain_loss:,.2f}</strong></li>"
+            )
             html.append("</ul>")
 
         html.append("</body></html>")
         return "".join(html)
 
-    def generate_pdf_report(self, filepath: str):
+    def generate_pdf_report(self, filepath: str) -> None:
         """Generate a PDF tax report using Playwright."""
         try:
             from playwright.sync_api import sync_playwright
@@ -359,13 +386,17 @@ class TaxEngine:
                     print(f"Error launching browser: {e}")
                     print("Attempting to install browsers...")
                     import subprocess
+
                     subprocess.run(["playwright", "install", "chromium"])
                     browser = p.chromium.launch()
 
                 page = browser.new_page()
                 page.set_content(html_content)
-                page.pdf(path=filepath, format="A4", margin={"top": "2cm", "bottom": "2cm", "left": "2cm", "right": "2cm"})
+                page.pdf(
+                    path=filepath,
+                    format="A4",
+                    margin={"top": "2cm", "bottom": "2cm", "left": "2cm", "right": "2cm"},
+                )
                 browser.close()
         except Exception as e:
             print(f"Failed to generate PDF: {e}")
-

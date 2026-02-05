@@ -12,9 +12,10 @@ from enum import Enum
 
 class EventType(Enum):
     """Types of stock events."""
-    VEST = "VEST"      # RSU vesting - treated as acquisition at market price
-    BUY = "BUY"        # ESPP purchase
-    SELL = "SELL"      # Manual sell or sell-to-cover
+
+    VEST = "VEST"  # RSU vesting - treated as acquisition at market price
+    BUY = "BUY"  # ESPP purchase
+    SELL = "SELL"  # Manual sell or sell-to-cover
 
 
 @dataclass
@@ -30,13 +31,14 @@ class StockEvent:
         fx_rate: USD to EUR exchange rate on that day (optional - will be fetched from ECB if None)
         notes: Optional notes for the transaction
     """
+
     event_date: date
     event_type: EventType
     shares: Decimal
     price_usd: Decimal
     fx_rate: Decimal | None = None
     notes: str = ""
-    _fx_rate_resolved: Decimal = field(default=None, init=False, repr=False)
+    _fx_rate_resolved: Decimal | None = field(default=None, init=False, repr=False)
 
     @property
     def resolved_fx_rate(self) -> Decimal:
@@ -49,6 +51,7 @@ class StockEvent:
         else:
             # Import here to avoid circular dependency
             from .ecb_rates import ECBRateFetcher
+
             self._fx_rate_resolved = ECBRateFetcher.get_rate(self.event_date)
 
         return self._fx_rate_resolved
@@ -63,14 +66,14 @@ class StockEvent:
         """Calculate total transaction value in EUR."""
         return (self.shares * self.price_eur).quantize(Decimal("0.0001"), ROUND_HALF_UP)
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         """Convert numeric fields to Decimal if needed."""
         if not isinstance(self.shares, Decimal):
-            self.shares = Decimal(str(self.shares))
+            object.__setattr__(self, "shares", Decimal(str(self.shares)))
         if not isinstance(self.price_usd, Decimal):
-            self.price_usd = Decimal(str(self.price_usd))
+            object.__setattr__(self, "price_usd", Decimal(str(self.price_usd)))
         if self.fx_rate is not None and not isinstance(self.fx_rate, Decimal):
-            self.fx_rate = Decimal(str(self.fx_rate))
+            object.__setattr__(self, "fx_rate", Decimal(str(self.fx_rate)))
 
 
 @dataclass
@@ -80,6 +83,7 @@ class ProcessedEvent:
 
     Contains the original event plus calculated values.
     """
+
     event: StockEvent
     total_shares_after: Decimal
     avg_cost_eur_after: Decimal
@@ -91,6 +95,7 @@ class ProcessedEvent:
 @dataclass
 class YearlyTaxSummary:
     """Tax summary for a single year."""
+
     year: int
     total_gains: Decimal = Decimal("0")
     total_losses: Decimal = Decimal("0")
@@ -124,6 +129,7 @@ class TaxEngineState:
 
     Tracks the portfolio position and moving average cost basis.
     """
+
     total_shares: Decimal = Decimal("0")
     avg_cost_eur: Decimal = Decimal("0")
     total_portfolio_cost_eur: Decimal = Decimal("0")

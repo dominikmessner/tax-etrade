@@ -6,7 +6,7 @@ from tax_engine.etrade_download_rsu import download_rsu_confirmations
 from tax_engine.etrade_login import login
 
 
-def main():
+def main() -> None:
     print("Starting full download process...")
 
     print("\n=== Step 1: Login ===")
@@ -37,6 +37,7 @@ def main():
         print(f"RSU download failed: {e}")
 
     print("\nAll tasks completed.")
+
 
 if __name__ == "__main__":
     main()

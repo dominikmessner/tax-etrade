@@ -7,7 +7,7 @@ Calculates capital gains tax using the Austrian moving average cost basis method
 Main entry point for the application.
 """
 
-from datetime import datetime
+from datetime import date, datetime
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
 
@@ -22,7 +22,7 @@ from tax_engine import (
 )
 
 
-def load_events_from_excel():
+def load_events_from_excel() -> list[StockEvent]:
     """
     Load stock events from the BenefitHistory.xlsx file.
     """
@@ -64,7 +64,7 @@ def load_events_from_excel():
             event_type=EventType.BUY,
             shares=shares,
             price_usd=price_usd,
-            notes="ESPP Purchase"
+            notes="ESPP Purchase",
         )
         events.append(event)
 
@@ -74,7 +74,7 @@ def load_events_from_excel():
     return events
 
 
-def load_orders_from_excel():
+def load_orders_from_excel() -> list[StockEvent]:
     """
     Load sell orders from the orders.xlsx file.
     """
@@ -126,14 +126,14 @@ def load_orders_from_excel():
             event_type=EventType.SELL,
             shares=shares,
             price_usd=price_usd,
-            notes="Sell Order"
+            notes="Sell Order",
         )
         events.append(event)
 
     return events
 
 
-def main():
+def main() -> None:
     """Run the tax engine with actual data from Excel files."""
     print("Austrian Tax Engine for E-Trade RSUs and ESPP")
     print("Using Moving Average Cost Basis (Gleitender Durchschnittspreis)")
@@ -155,7 +155,7 @@ def main():
 
     # Sort by date, then by event type (BUY/VEST before SELL) to handle same-day transactions
     # We want VEST/BUY to happen before SELL so we have inventory to sell
-    def event_sort_key(event):
+    def event_sort_key(event: StockEvent) -> tuple[date, int]:
         # Priority: VEST/BUY = 0, SELL = 1
         type_priority = 1 if event.event_type == EventType.SELL else 0
         return (event.event_date, type_priority)

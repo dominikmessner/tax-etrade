@@ -11,7 +11,8 @@ SESSION_FILE = "input/etrade_session.json"
 TARGET_URL = "https://us.etrade.com/etx/sp/stockplan#/myAccount/stockPlanConfirmations"
 OUTPUT_DIR = Path("input/rsu")
 
-def download_rsu_confirmations():
+
+def download_rsu_confirmations() -> None:
     if not os.path.exists(SESSION_FILE):
         print(f"Session file {SESSION_FILE} not found. Please run etrade_login.py first.")
         return
@@ -33,8 +34,10 @@ def download_rsu_confirmations():
 
         # Wait for page load
         try:
-            page.wait_for_url(lambda url: "stockPlanConfirmations" in url and "login" not in url, timeout=10000)
-            page.locator("[data-test-id=\"stockplanconf.benefittype\"]").wait_for(timeout=10000)
+            page.wait_for_url(
+                lambda url: "stockPlanConfirmations" in url and "login" not in url, timeout=10000
+            )
+            page.locator('[data-test-id="stockplanconf.benefittype"]').wait_for(timeout=10000)
         except Exception:
             print("Login session might be expired or page load failed.")
             browser.close()
@@ -51,10 +54,12 @@ def download_rsu_confirmations():
         start_date_input.fill("12/22/19")
 
         # Select Benefit Type = RS (Restricted Stock)
-        page.locator("[data-test-id=\"stockplanconf.benefittype\"]").get_by_label("Benefit Type").select_option("RS")
+        page.locator('[data-test-id="stockplanconf.benefittype"]').get_by_label(
+            "Benefit Type"
+        ).select_option("RS")
 
         # Click Apply
-        page.locator("[data-test-id=\"Filter applybtn\"]").click()
+        page.locator('[data-test-id="Filter applybtn"]').click()
 
         # Wait for results
         time.sleep(2)
@@ -74,7 +79,11 @@ def download_rsu_confirmations():
         # Find all rows
         # We need to be careful to get the actual data rows.
         # Based on previous scripts, we can look for rows that have the download button.
-        rows = page.locator("tr").filter(has=page.locator("[data-test-id=\"Stockplanconfig.transactiontable.download\"]")).all()
+        rows = (
+            page.locator("tr")
+            .filter(has=page.locator('[data-test-id="Stockplanconfig.transactiontable.download"]'))
+            .all()
+        )
 
         print(f"Found {len(rows)} potential documents.")
 
@@ -102,7 +111,9 @@ def download_rsu_confirmations():
 
                 # Click download to get the URL (and cId)
                 with page.expect_popup() as popup_info:
-                    row.locator("[data-test-id=\"Stockplanconfig.transactiontable.download\"]").click()
+                    row.locator(
+                        '[data-test-id="Stockplanconfig.transactiontable.download"]'
+                    ).click()
 
                 popup = popup_info.value
                 popup.wait_for_load_state()
@@ -113,7 +124,7 @@ def download_rsu_confirmations():
                 # Extract cId from URL
                 parsed_url = urlparse(pdf_url)
                 query_params = parse_qs(parsed_url.query)
-                c_id = query_params.get('cId', [''])[0]
+                c_id = query_params.get("cId", [""])[0]
 
                 if not c_id:
                     print(f"Could not extract cId from URL: {pdf_url}. Using timestamp fallback.")
@@ -149,6 +160,7 @@ def download_rsu_confirmations():
                 print(f"Error processing row {i}: {e}")
 
         browser.close()
+
 
 if __name__ == "__main__":
     download_rsu_confirmations()

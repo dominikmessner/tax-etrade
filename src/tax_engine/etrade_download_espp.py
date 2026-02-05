@@ -10,14 +10,16 @@ TARGET_URL = "https://us.etrade.com/etx/sp/stockplan#/myAccount/benefitHistory"
 DOWNLOAD_DIR = Path("input/espp")
 TARGET_FILENAME = "BenefitHistory.xlsx"
 
-def backup_existing_file(file_path: Path):
+
+def backup_existing_file(file_path: Path) -> None:
     if file_path.exists():
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         backup_path = file_path.with_name(f"{file_path.stem}_{timestamp}{file_path.suffix}")
         print(f"Backing up existing file to {backup_path}")
         shutil.move(str(file_path), str(backup_path))
 
-def download_benefit_history():
+
+def download_benefit_history() -> None:
     if not os.path.exists(SESSION_FILE):
         print(f"Session file {SESSION_FILE} not found. Please run etrade_login.py first.")
         return
@@ -81,6 +83,7 @@ def download_benefit_history():
         # Give it a second before closing
         page.wait_for_timeout(2000)
         browser.close()
+
 
 if __name__ == "__main__":
     download_benefit_history()

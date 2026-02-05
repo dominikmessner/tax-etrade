@@ -10,7 +10,8 @@ TARGET_URL = "https://us.etrade.com/etx/sp/stockplan#/myAccount/orders"
 OUTPUT_DIR = Path("input/orders")
 OUTPUT_FILE = OUTPUT_DIR / "orders.xlsx"
 
-def download_orders():
+
+def download_orders() -> None:
     if not os.path.exists(SESSION_FILE):
         print(f"Session file {SESSION_FILE} not found. Please run etrade_login.py first.")
         return
@@ -31,7 +32,7 @@ def download_orders():
         # Wait for page load
         try:
             page.wait_for_url(lambda url: "orders" in url and "login" not in url, timeout=10000)
-            page.locator("[data-test-id=\"orders.year\"]").wait_for(timeout=10000)
+            page.locator('[data-test-id="orders.year"]').wait_for(timeout=10000)
         except Exception:
             print("Login session might be expired or page load failed.")
             browser.close()
@@ -39,17 +40,17 @@ def download_orders():
 
         print("Setting filters...")
         # Select Custom Year
-        page.locator("[data-test-id=\"orders.year\"]").get_by_label("Year").select_option("Custom")
+        page.locator('[data-test-id="orders.year"]').get_by_label("Year").select_option("Custom")
 
         # Set Start Date
         # We need to be careful with date pickers. The user suggested clicking/dblclicking/filling.
         start_date_input = page.get_by_role("textbox", name="Start date (format: MM/DD/YY)")
         start_date_input.click()
-        start_date_input.dblclick() # Select all existing text
+        start_date_input.dblclick()  # Select all existing text
         start_date_input.fill("12/22/19")
 
         # Click Apply
-        page.locator("[data-test-id=\"Filter applybtn\"]").click()
+        page.locator('[data-test-id="Filter applybtn"]').click()
 
         # Wait for results to update
         time.sleep(2)
@@ -100,12 +101,14 @@ def download_orders():
             # But maybe we want all orders. The user asked for "Sell orders".
             # Let's just grab everything for now and filter later if needed.
 
-            data.append({
-                "Order Date": order_date,
-                "Sold Qty.": sold_qty,
-                "Execution Price": exec_price,
-                "Benefit Type": benefit_type
-            })
+            data.append(
+                {
+                    "Order Date": order_date,
+                    "Sold Qty.": sold_qty,
+                    "Execution Price": exec_price,
+                    "Benefit Type": benefit_type,
+                }
+            )
 
         print(f"Extracted {len(data)} records.")
 
@@ -118,6 +121,7 @@ def download_orders():
             print("No data found.")
 
         browser.close()
+
 
 if __name__ == "__main__":
     download_orders()
