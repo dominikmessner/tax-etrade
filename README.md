@@ -49,16 +49,16 @@ To automate downloading transaction history from E-Trade:
 
 2.  **Run the download assistant**:
     ```bash
-    uv run tax-download-all
+    uv run tax-download
     ```
     This will guide you through login and automatically download all required files (ESPP history, Orders, and RSU confirmations).
 
     Alternatively, you can run individual tasks:
     ```bash
     uv run tax-login
-    uv run tax-espp
-    uv run tax-orders
-    uv run tax-rsu
+    uv run tax-download-espp
+    uv run tax-download-orders
+    uv run tax-download-rsu
     ```
 
 ### 4. Run Analysis

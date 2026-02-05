@@ -4,6 +4,17 @@ cd /d "%~dp0"
 echo ==========================================
 echo    Austrian Tax Engine - Setup & Run
 echo ==========================================
+echo Working directory: %CD%
+
+REM Check that pyproject.toml exists
+if not exist "pyproject.toml" (
+    echo ERROR: pyproject.toml not found in %CD%
+    echo.
+    echo Make sure you extracted the ENTIRE project folder and are
+    echo running this script from inside the tax-engine directory.
+    pause
+    exit /b 1
+)
 
 REM 1. Check for Python
 python --version >nul 2>&1

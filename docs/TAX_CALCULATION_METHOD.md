@@ -24,6 +24,9 @@ Unlike FIFO (First In, First Out) or LIFO (Last In, First Out), the moving avera
 New Average Cost = (Old Total Cost + New Acquisition Cost) / (Old Shares + New Shares)
 ```
 
+> ⚠️ **Why not use E-Trade's Gain & Loss reports?**
+> E-Trade allows you to choose which specific lot of shares to sell (e.g., FIFO, LIFO, or specific identification). This is common in the US, but **Austrian tax law does not allow lot selection** — you must use the moving average cost basis for all shares of the same security. E-Trade's G&L reports are therefore not compliant with Austrian tax requirements, which is why this tool exists.
+
 ### 3. Capital Gains Tax (KESt - Kapitalertragsteuer)
 
 Austria taxes capital gains on securities at a flat rate of **27.5%**.
