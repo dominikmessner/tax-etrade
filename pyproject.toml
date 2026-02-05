@@ -8,7 +8,7 @@ version = "0.1.0"
 description = "Austrian Tax Engine for E-Trade RSUs and ESPP using Moving Average Cost Basis"
 readme = "README.md"
 license = "MIT"
-requires-python = ">=3.12"
+requires-python = ">=3.10"
 keywords = ["tax", "austria", "espp", "rsu", "capital-gains", "kest"]
 dependencies = [
     "openpyxl>=3.1.5",
@@ -45,7 +45,7 @@ package-dir = {"" = "src"}
 where = ["src"]
 
 [tool.ruff]
-target-version = "py312"
+target-version = "py310"
 line-length = 100
 
 [tool.ruff.lint]

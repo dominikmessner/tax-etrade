@@ -8,9 +8,10 @@ Calculates capital gains tax using the Austrian moving average cost basis method
 
 If you are not a developer, you can simply use the provided script:
 
-1.  Double-click the `run_tax_engine.command` file in this folder.
-2.  It will automatically set up Python, install dependencies, and open a menu.
-3.  Follow the menu options to Login, Download Data, and Calculate Tax.
+1.  **Download the entire project** as a ZIP from GitHub (click "Code" → "Download ZIP") and extract it.
+2.  Double-click the `run_tax_engine.command` file inside the extracted folder.
+3.  It will automatically set up Python, install dependencies, and open a menu.
+4.  Follow the menu options to Login, Download Data, and Calculate Tax.
 
 *Note: The first time you run it, you might need to right-click and select "Open" if macOS warns about an unidentified developer, or allow it in System Settings.*
 
@@ -18,9 +19,23 @@ If you are not a developer, you can simply use the provided script:
 
 If you are not a developer, you can simply use the provided script:
 
-1.  Double-click the `run_tax_engine.bat` file in this folder.
-2.  It will automatically set up Python, install dependencies, and open a menu.
-3.  Follow the menu options to Login, Download Data, and Calculate Tax.
+1.  **Download the entire project** as a ZIP from GitHub (click "Code" → "Download ZIP") and extract it.
+2.  Double-click the `run_tax_engine.bat` file inside the extracted folder.
+3.  It will automatically set up Python, install dependencies, and open a menu.
+4.  Follow the menu options to Login, Download Data, and Calculate Tax.
+
+## Easy Start (Linux Users)
+
+If you are not a developer, you can use the same script as Mac users:
+
+1.  **Download the entire project** as a ZIP from GitHub (click "Code" → "Download ZIP") and extract it.
+2.  Open a terminal in the extracted folder and run:
+    ```bash
+    chmod +x run_tax_engine.command
+    ./run_tax_engine.command
+    ```
+3.  It will automatically set up Python, install dependencies, and open a menu.
+4.  Follow the menu options to Login, Download Data, and Calculate Tax.
 
 ## Developer Quick Start
 
