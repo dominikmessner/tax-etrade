@@ -4,6 +4,7 @@ Demo script to run the tax engine with sample data.
 
 This script demonstrates the tax engine functionality using the sample data.
 """
+
 import sys
 from pathlib import Path
 

@@ -21,7 +21,7 @@ This is an **Austrian Tax Engine** that calculates capital gains tax using the *
 ## Key Tax Rules (Austrian Law)
 
 - **Rule A**: Moving average recalculated on every acquisition (VEST/BUY)
-- **Rule B**: Selling doesn't change the average cost, only reduces quantity  
+- **Rule B**: Selling doesn't change the average cost, only reduces quantity
 - **Rule C**: Cannot sell more shares than currently held (depot check)
 - **KESt Rate**: 27.5% on capital gains
 - Losses can offset gains within the same year but cannot be carried forward

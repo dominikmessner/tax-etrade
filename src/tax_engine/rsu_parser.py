@@ -58,12 +58,13 @@ def parse_rsu_pdf(pdf_path: Path) -> StockEvent | None:
                 event_type=EventType.VEST,
                 shares=shares,
                 price_usd=price_usd,
-                notes=f"RSU Vest ({pdf_path.name})"
+                notes=f"RSU Vest ({pdf_path.name})",
             )
 
     except Exception as e:
         print(f"Error parsing {pdf_path.name}: {e}")
         return None
+
 
 def load_rsu_events(rsu_dir: Path = Path("input/rsu")) -> list[StockEvent]:
     """

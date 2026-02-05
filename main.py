@@ -7,6 +7,7 @@ Calculates capital gains tax using the Austrian moving average cost basis method
 
 Main entry point for the application.
 """
+
 import sys
 from pathlib import Path
 

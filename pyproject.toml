@@ -63,6 +63,10 @@ ignore = [
     "E501",   # line too long (handled by formatter)
 ]
 
+[tool.ruff.lint.per-file-ignores]
+"main.py" = ["E402"]  # Module level import not at top (sys.path manipulation)
+"demo.py" = ["E402"]  # Module level import not at top (sys.path manipulation)
+
 [tool.ruff.lint.isort]
 known-first-party = ["tax_engine"]
 
@@ -77,8 +81,22 @@ disallow_untyped_defs = true
 module = [
     "pdfplumber.*",
     "openpyxl.*",
+    "playwright.*",
 ]
 ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = "tax_engine.etrade_login"
+# Playwright's new_context has complex overloaded types that don't work well with **kwargs
+disable_error_code = ["arg-type"]
+
+[[tool.mypy.overrides]]
+module = "tests.*"
+# Tests don't need strict typing - focus on runtime correctness
+disallow_untyped_defs = false
+disallow_incomplete_defs = false
+disallow_untyped_calls = false
+disable_error_code = ["arg-type", "union-attr", "type-arg"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
