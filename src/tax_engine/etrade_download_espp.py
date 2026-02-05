@@ -2,6 +2,7 @@ import os
 import shutil
 from datetime import datetime
 from pathlib import Path
+
 from playwright.sync_api import sync_playwright
 
 SESSION_FILE = "input/etrade_session.json"
@@ -24,7 +25,7 @@ def download_benefit_history():
     with sync_playwright() as p:
         # Headless=False is useful to see what's happening, but can be set to True later
         browser = p.chromium.launch(headless=False)
-        
+
         try:
             context = browser.new_context(storage_state=SESSION_FILE)
         except Exception as e:
@@ -36,7 +37,7 @@ def download_benefit_history():
 
         print(f"Navigating to {TARGET_URL}")
         page.goto(TARGET_URL)
-        
+
         # Wait for the page to load and check if we are logged in
         # We wait for the Download button to be visible as a sign of successful load
         try:
@@ -51,32 +52,32 @@ def download_benefit_history():
             return
 
         print("Downloading Benefit History...")
-        
+
         try:
             # Click Download button
             page.get_by_role("button", name="Download").click()
-            
+
             # Click Download Expanded and wait for download
             with page.expect_download() as download_info:
                 page.get_by_role("menuitem", name="Download Expanded").click()
-            
+
             download = download_info.value
             print(f"Download started: {download.suggested_filename}")
-            
+
             # Prepare target path
             DOWNLOAD_DIR.mkdir(parents=True, exist_ok=True)
             target_path = DOWNLOAD_DIR / TARGET_FILENAME
-            
+
             # Backup existing file
             backup_existing_file(target_path)
-            
+
             # Save new file
             download.save_as(target_path)
             print(f"Successfully saved to {target_path}")
-            
+
         except Exception as e:
             print(f"Error during download: {e}")
-        
+
         # Give it a second before closing
         page.wait_for_timeout(2000)
         browser.close()

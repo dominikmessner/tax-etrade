@@ -1,5 +1,7 @@
 import sys
+
 import pytest
+
 
 def main():
     """Run all tests using pytest."""

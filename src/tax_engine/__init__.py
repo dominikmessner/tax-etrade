@@ -5,20 +5,20 @@ A tax calculation engine implementing the Austrian moving average cost basis met
 (Gleitender Durchschnittspreis) for stocks acquired through RSU vesting and ESPP purchases.
 """
 
+from .ecb_rates import ECBRateFetcher, prefetch_ecb_rates
 from .models import (
     EventType,
-    StockEvent,
     ProcessedEvent,
-    YearlyTaxSummary,
+    StockEvent,
     TaxEngineState,
-)
-from .ecb_rates import ECBRateFetcher, prefetch_ecb_rates
-from .tax_engine import TaxEngine
-from .sample_data import (
-    create_sample_events_with_manual_fx,
-    create_sample_events_with_ecb_rates,
+    YearlyTaxSummary,
 )
 from .rsu_parser import load_rsu_events
+from .sample_data import (
+    create_sample_events_with_ecb_rates,
+    create_sample_events_with_manual_fx,
+)
+from .tax_engine import TaxEngine
 
 __version__ = "0.1.0"
 
@@ -33,4 +33,5 @@ __all__ = [
     "TaxEngine",
     "create_sample_events_with_manual_fx",
     "create_sample_events_with_ecb_rates",
+    "load_rsu_events",
 ]
