@@ -78,7 +78,7 @@ while true; do
             echo "------------------------------------------"
             echo "Downloading Data..."
             echo "------------------------------------------"
-            .venv/bin/tax-download-all
+            .venv/bin/tax-download
             echo ""
             read -p "Press Enter to return to menu..."
             ;;
@@ -86,7 +86,7 @@ while true; do
             echo "------------------------------------------"
             echo "Calculating Tax..."
             echo "------------------------------------------"
-            .venv/bin/tax-calc
+            .venv/bin/tax-engine
             echo ""
             read -p "Press Enter to return to menu..."
             ;;

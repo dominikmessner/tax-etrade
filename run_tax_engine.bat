@@ -82,13 +82,13 @@ if "%choice%"=="1" (
 )
 if "%choice%"=="2" (
     echo Downloading Data...
-    .venv\Scripts\tax-download-all
+    .venv\Scripts\tax-download
     pause
     goto menu
 )
 if "%choice%"=="3" (
     echo Calculating Tax...
-    .venv\Scripts\tax-calc
+    .venv\Scripts\tax-engine
     pause
     goto menu
 )
