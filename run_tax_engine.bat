@@ -2,7 +2,7 @@
 cd /d "%~dp0"
 
 echo ==========================================
-echo    Austrian Tax Engine - Setup & Run
+echo    Austrian Tax Engine - Setup ^& Run
 echo ==========================================
 echo Working directory: %CD%
 
