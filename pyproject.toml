@@ -11,6 +11,7 @@ license = "MIT"
 requires-python = ">=3.10"
 keywords = ["tax", "austria", "espp", "rsu", "capital-gains", "kest"]
 dependencies = [
+    "certifi>=2024.0.0",
     "openpyxl>=3.1.5",
     "pandas>=2.3.3",
     "pdfplumber>=0.11.8",

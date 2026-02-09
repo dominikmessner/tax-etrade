@@ -5,11 +5,14 @@ Fetches USD/EUR exchange rates from the European Central Bank
 Statistical Data Warehouse API.
 """
 
+import ssl
 import urllib.request
 import xml.etree.ElementTree as ET
 from datetime import date, timedelta
 from decimal import ROUND_HALF_UP, Decimal
 from typing import TYPE_CHECKING
+
+import certifi
 
 if TYPE_CHECKING:
     from .models import StockEvent
@@ -38,7 +41,8 @@ class ECBRateFetcher:
         url = cls.ECB_API_URL.format(start=start_date.isoformat(), end=end_date.isoformat())
 
         try:
-            with urllib.request.urlopen(url, timeout=30) as response:
+            ssl_context = ssl.create_default_context(cafile=certifi.where())
+            with urllib.request.urlopen(url, timeout=30, context=ssl_context) as response:
                 xml_data = response.read()
         except Exception as e:
             raise RuntimeError(f"Failed to fetch ECB rates: {e}") from e
