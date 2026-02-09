@@ -85,6 +85,17 @@ uv run main.py
 
 It will generate a pdf file tax_report_*.pdf
 
+## Filing in FinanzOnline
+
+The tax report output includes the values you need for your Austrian tax return (Formulars E1 / E1kv):
+
+| Kennzahl | Description | Value to enter |
+|----------|-------------|----------------|
+| **994**  | Realized gains from capital assets (Einkünfte aus Kapitalvermögen) | Total gains for the year |
+| **892**  | Realized losses from capital assets (Verluste aus Kapitalvermögen) | Total losses for the year (as a negative number) |
+
+These Kennzahlen are shown in both the console output and the generated PDF report.
+
 ## How It Works
 
 For a detailed explanation of the tax calculation methodology, including the moving average cost basis formula, currency conversion, and practical examples, see the [Tax Calculation Method](docs/TAX_CALCULATION_METHOD.md) documentation.

@@ -244,6 +244,17 @@ class TaxEngine:
 
         print("=" * 80)
 
+        # FinanzOnline Kennzahlen
+        print("\nFINANZONLINE (Formulars E1 / E1kv)")
+        print("-" * 80)
+        print("Enter the following values in FinanzOnline for each tax year:")
+        print()
+        for summary in self.get_all_yearly_summaries():
+            print(f"  Year {summary.year}:")
+            print(f"    Kennzahl 994 (Gains):  €{summary.total_gains:>12,.2f}")
+            print(f"    Kennzahl 892 (Losses): €{summary.total_losses:>12,.2f}")
+            print()
+
     def generate_html_content(self) -> str:
         """Generate HTML content for the tax report."""
         html = []
@@ -301,6 +312,26 @@ class TaxEngine:
             html.append(f"<td><strong>€{summary.kest_due:,.2f}</strong></td>")
             html.append("</tr>")
         html.append("</table>")
+
+        html.append("<h2>FinanzOnline (Formulars E1 / E1kv)</h2>")
+        html.append(
+            "<p>Enter the following values in <strong>FinanzOnline</strong> for each tax year:</p>"
+        )
+        html.append("<table>")
+        html.append(
+            "<tr><th>Year</th><th>Kennzahl 994 (Gains)</th><th>Kennzahl 892 (Losses)</th></tr>"
+        )
+        for summary in self.get_all_yearly_summaries():
+            html.append("<tr>")
+            html.append(f"<td>{summary.year}</td>")
+            html.append(f"<td>€{summary.total_gains:,.2f}</td>")
+            html.append(f"<td>€{summary.total_losses:,.2f}</td>")
+            html.append("</tr>")
+        html.append("</table>")
+        html.append(
+            "<p><em>Kennzahl 994 = total realized gains, "
+            "Kennzahl 892 = total realized losses (entered as a negative number).</em></p>"
+        )
 
         html.append("<h2>Detailed Transaction Ledger</h2>")
         html.append(

@@ -562,6 +562,91 @@ class TestTaxEngineYearlySummary:
         assert summary.total_losses == Decimal("0")
 
 
+class TestFinanzOnlineOutput:
+    """Tests for FinanzOnline Kennzahl output in console and HTML report."""
+
+    def _build_engine_with_gain_and_loss(self):
+        """Helper: build an engine with a gain in 2021 and a loss in 2022."""
+        engine = TaxEngine()
+        # 2021: vest 100 @ $40 (€32.80), sell 50 @ $60 (€49.20) → gain
+        engine.process_event(
+            StockEvent(
+                event_date=date(2021, 1, 15),
+                event_type=EventType.VEST,
+                shares=Decimal("100"),
+                price_usd=Decimal("40.00"),
+                fx_rate=Decimal("0.82"),
+            )
+        )
+        engine.process_event(
+            StockEvent(
+                event_date=date(2021, 6, 15),
+                event_type=EventType.SELL,
+                shares=Decimal("50"),
+                price_usd=Decimal("60.00"),
+                fx_rate=Decimal("0.82"),
+            )
+        )
+        # 2022: sell 50 @ $20 (€16.40) → loss
+        engine.process_event(
+            StockEvent(
+                event_date=date(2022, 3, 10),
+                event_type=EventType.SELL,
+                shares=Decimal("50"),
+                price_usd=Decimal("20.00"),
+                fx_rate=Decimal("0.82"),
+            )
+        )
+        return engine
+
+    def test_print_tax_summary_contains_kennzahl_994(self, capsys):
+        """Console output should contain Kennzahl 994 with gains."""
+        engine = self._build_engine_with_gain_and_loss()
+        engine.print_tax_summary()
+        output = capsys.readouterr().out
+
+        assert "Kennzahl 994" in output
+        assert "FINANZONLINE" in output
+
+    def test_print_tax_summary_contains_kennzahl_892(self, capsys):
+        """Console output should contain Kennzahl 892 with losses."""
+        engine = self._build_engine_with_gain_and_loss()
+        engine.print_tax_summary()
+        output = capsys.readouterr().out
+
+        assert "Kennzahl 892" in output
+
+    def test_print_tax_summary_losses_are_negative(self, capsys):
+        """Kennzahl 892 losses should be shown as negative numbers."""
+        engine = self._build_engine_with_gain_and_loss()
+        engine.print_tax_summary()
+        output = capsys.readouterr().out
+
+        # Find the 2022 Kennzahl 892 line — losses must be negative
+        for line in output.splitlines():
+            if "Kennzahl 892" in line and "2022" not in line:
+                continue
+            if "Kennzahl 892" in line:
+                # The value after € should be negative
+                assert "-" in line, "Kennzahl 892 losses must be negative"
+
+    def test_html_report_contains_kennzahl_section(self):
+        """HTML report should contain FinanzOnline Kennzahl section."""
+        engine = self._build_engine_with_gain_and_loss()
+        html = engine.generate_html_content()
+
+        assert "Kennzahl 994" in html
+        assert "Kennzahl 892" in html
+        assert "FinanzOnline" in html
+
+    def test_html_report_losses_are_negative(self):
+        """Kennzahl 892 in HTML should show losses as negative."""
+        engine = self._build_engine_with_gain_and_loss()
+        html = engine.generate_html_content()
+
+        assert "negative number" in html
+
+
 class TestTaxEngineEdgeCases:
     """Tests for edge cases and boundary conditions."""
 
