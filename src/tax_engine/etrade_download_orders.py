@@ -47,13 +47,19 @@ def download_orders() -> None:
         start_date_input = page.get_by_role("textbox", name="Start date (format: MM/DD/YY)")
         start_date_input.click()
         start_date_input.dblclick()  # Select all existing text
-        start_date_input.fill("12/22/19")
+        start_date_input.fill("01/01/19")
 
         # Click Apply
         page.locator('[data-test-id="Filter applybtn"]').click()
 
         # Wait for results to update
-        time.sleep(2)
+        for _ in range(30):
+            displays = page.locator(".spinner-overlay-spinner").evaluate_all(
+                "elements => elements.map(e => window.getComputedStyle(e).display)"
+            )
+            if all(d == "none" for d in displays):
+                break
+            time.sleep(1)
 
         # Click View All if available
         try:

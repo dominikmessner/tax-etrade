@@ -51,7 +51,7 @@ def download_rsu_confirmations() -> None:
         start_date_input = page.get_by_role("textbox", name="Start date (format: MM/DD/YY)")
         start_date_input.click()
         start_date_input.dblclick()
-        start_date_input.fill("12/22/19")
+        start_date_input.fill("01/01/19")
 
         # Select Benefit Type = RS (Restricted Stock)
         page.locator('[data-test-id="stockplanconf.benefittype"]').get_by_label(
@@ -61,8 +61,14 @@ def download_rsu_confirmations() -> None:
         # Click Apply
         page.locator('[data-test-id="Filter applybtn"]').click()
 
-        # Wait for results
-        time.sleep(2)
+        # Wait for results to update
+        for _ in range(30):
+            displays = page.locator(".spinner-overlay-spinner").evaluate_all(
+                "elements => elements.map(e => window.getComputedStyle(e).display)"
+            )
+            if all(d == "none" for d in displays):
+                break
+            time.sleep(1)
 
         # Click View All if available
         try:
@@ -137,6 +143,8 @@ def download_rsu_confirmations() -> None:
                 if file_path.exists():
                     print(f"File {filename} already exists. Skipping.")
                     popup.close()
+                    # Sleep a bit to be nice to the server
+                    time.sleep(5)
                     continue
 
                 print(f"Downloading {filename}...")
@@ -154,7 +162,7 @@ def download_rsu_confirmations() -> None:
                 popup.close()
 
                 # Sleep a bit to be nice to the server
-                time.sleep(1)
+                time.sleep(5)
 
             except Exception as e:
                 print(f"Error processing row {i}: {e}")
