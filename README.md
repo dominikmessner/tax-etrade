@@ -37,6 +37,25 @@ If you are not a developer, you can use the same script as Mac users:
 3.  It will automatically set up Python, install dependencies, and open a menu.
 4.  Follow the menu options to Login, Download Data, and Calculate Tax.
 
+## Easy Start (Devcontainer)
+
+In Visual Studio Code, open this workspace using the Dev Containers extension to run it inside the provided development container.
+
+The container includes a lightweight desktop (fluxbox) and a Chromium browser installed via Playwright (will be installed after creating the container).
+
+Security note: The container runs with elevated privileges so Playwright's Chromium can run correctly. This isolates the container's browser from your host browser but is not a hardened sandbox - do not rely on it as an unescapable security boundary for untrusted code.
+
+Access the desktop:
+- Open in a browser at http://localhost:6080
+- Or connect with a VNC client on port 5901 (port may vary; check the VS Code "Ports" tab)
+
+Start the download assistant (it opens the browser inside the container):
+```bash
+uv run tax-download
+```
+
+Use the assistant to log in to E-Trade and download the required files (ESPP history, Orders, RSU confirmations).
+
 ## Developer Quick Start
 
 ### 1. Setup environment
