@@ -95,10 +95,6 @@ def download_orders() -> None:
             # Execution Price: 9
 
             benefit_type = cells[1].inner_text().strip()
-            if "Stock Options" in benefit_type:
-                print(f"Skipping Stock Options order on {cells[2].inner_text().strip()}")
-                continue
-
             order_date = cells[2].inner_text().strip()
             sold_qty = cells[8].inner_text().strip()
             exec_price = cells[9].inner_text().strip()

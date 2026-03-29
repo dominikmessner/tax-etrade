@@ -20,6 +20,7 @@ from tax_engine import (
     load_rsu_events,
     prefetch_ecb_rates,
 )
+from tax_engine.options_parser import load_options_events
 
 
 def load_events_from_excel() -> list[StockEvent]:
@@ -124,6 +125,12 @@ def load_orders_from_excel() -> list[StockEvent]:
                     print(f"Error parsing date: {raw_date}")
                     continue
 
+        # Skip Stock Options rows — same-day sales are already captured from
+        # the options confirmation PDFs via load_options_stock_events()
+        benefit_type = str(row.get("Benefit Type", "")).strip()
+        if benefit_type == "Stock Options":
+            continue
+
         # Parse quantity
         # row index + 1 for 0-based index, +1 for header row
         printable_index = i + 2
@@ -136,6 +143,9 @@ def load_orders_from_excel() -> list[StockEvent]:
             shares = Decimal(sold_qty_str)
         except InvalidOperation:
             print(f"Error parsing quantity in row #{printable_index}: {sold_qty_str}")
+            continue
+        if shares <= 0:
+            print(f"Skipping row #{printable_index}: zero quantity")
             continue
 
         # Parse price
@@ -150,6 +160,42 @@ def load_orders_from_excel() -> list[StockEvent]:
             notes="Sell Order",
         )
         events.append(event)
+
+    return events
+
+
+def load_options_stock_events() -> list[StockEvent]:
+    """
+    Convert options exercise confirmations into StockEvent objects.
+
+    Each exercise creates an EXERCISE event (acquisition at FMV).
+    Same-day sales additionally create a SELL event at the sale price.
+    """
+    exercises = load_options_events()
+    events: list[StockEvent] = []
+
+    for ex in exercises:
+        # EXERCISE event: acquire shares at FMV (Exercise Market Value)
+        # This is the cost basis for Austrian capital gains purposes.
+        exercise_event = StockEvent(
+            event_date=ex.exercise_date,
+            event_type=EventType.EXERCISE,
+            shares=ex.shares_exercised,
+            price_usd=ex.fmv_usd,
+            notes=f"Options Exercise (strike ${ex.grant_price_usd}, {ex.exercise_type})",
+        )
+        events.append(exercise_event)
+
+        # Same-day sale: also add a SELL event at the sale price
+        if ex.exercise_type == "Same-Day Sale" and ex.sale_price_usd and ex.shares_sold:
+            sell_event = StockEvent(
+                event_date=ex.exercise_date,
+                event_type=EventType.SELL,
+                shares=ex.shares_sold,
+                price_usd=ex.sale_price_usd,
+                notes=f"Options Same-Day Sale (order {ex.order_number})",
+            )
+            events.append(sell_event)
 
     return events
 
@@ -170,9 +216,10 @@ def main() -> None:
     espp_events = load_events_from_excel()
     sell_events = load_orders_from_excel()
     rsu_events = load_rsu_events()
+    options_events = load_options_stock_events()
 
     # Combine and sort all events
-    events = espp_events + sell_events + rsu_events
+    events = espp_events + sell_events + rsu_events + options_events
 
     # Sort by date, then by event type (BUY/VEST before SELL) to handle same-day transactions
     # We want VEST/BUY to happen before SELL so we have inventory to sell

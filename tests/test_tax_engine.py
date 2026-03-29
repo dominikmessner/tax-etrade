@@ -101,6 +101,54 @@ class TestTaxEngineAcquisition:
         engine.process_event(event)
         assert engine.state.total_shares == Decimal("10")
 
+    def test_exercise_sets_avg_cost(self):
+        """EXERCISE uses FMV as cost basis, identical to VEST treatment."""
+        engine = TaxEngine()
+        event = StockEvent(
+            event_date=date(2024, 7, 2),
+            event_type=EventType.EXERCISE,
+            shares=Decimal("40"),
+            price_usd=Decimal("45.47"),
+            fx_rate=Decimal("0.9321"),
+        )
+
+        result = engine.process_event(event)
+
+        fmv_eur = (Decimal("45.47") * Decimal("0.9321")).quantize(Decimal("0.0001"))
+        assert engine.state.total_shares == Decimal("40")
+        assert engine.state.avg_cost_eur == fmv_eur
+        assert result.realized_gain_loss == Decimal("0")
+
+    def test_exercise_updates_moving_average(self):
+        """EXERCISE blends into the moving average like any acquisition."""
+        engine = TaxEngine()
+
+        # Existing position: 100 shares @ €41
+        engine.process_event(
+            StockEvent(
+                event_date=date(2024, 1, 1),
+                event_type=EventType.VEST,
+                shares=Decimal("100"),
+                price_usd=Decimal("50.00"),
+                fx_rate=Decimal("0.82"),
+            )
+        )
+
+        # Exercise: 50 shares @ FMV €50 (€50 * 1.0 FX)
+        engine.process_event(
+            StockEvent(
+                event_date=date(2024, 7, 2),
+                event_type=EventType.EXERCISE,
+                shares=Decimal("50"),
+                price_usd=Decimal("50.00"),
+                fx_rate=Decimal("1.00"),
+            )
+        )
+
+        # New avg = (100 * 41 + 50 * 50) / 150 = (4100 + 2500) / 150 = 44.00
+        assert engine.state.total_shares == Decimal("150")
+        assert engine.state.avg_cost_eur == pytest.approx(Decimal("44.0000"), abs=Decimal("0.0001"))
+
 
 class TestTaxEngineSell:
     """Tests for SELL processing."""
@@ -356,6 +404,31 @@ class TestTaxEngineEventSorting:
         sorted_events = engine._sort_events(events)
 
         assert sorted_events[0].event_type == EventType.BUY
+        assert sorted_events[1].event_type == EventType.SELL
+
+    def test_same_day_exercise_before_sell(self):
+        """On same day, EXERCISE should be processed before SELL (same-day sale scenario)."""
+        engine = TaxEngine()
+        events = [
+            StockEvent(
+                event_date=date(2025, 2, 6),
+                event_type=EventType.SELL,  # Listed first — must be sorted after EXERCISE
+                shares=Decimal("780"),
+                price_usd=Decimal("61.29"),
+                fx_rate=Decimal("0.9653"),
+            ),
+            StockEvent(
+                event_date=date(2025, 2, 6),
+                event_type=EventType.EXERCISE,
+                shares=Decimal("780"),
+                price_usd=Decimal("60.12"),
+                fx_rate=Decimal("0.9653"),
+            ),
+        ]
+
+        sorted_events = engine._sort_events(events)
+
+        assert sorted_events[0].event_type == EventType.EXERCISE
         assert sorted_events[1].event_type == EventType.SELL
 
     def test_same_day_vest_before_buy_before_sell(self):

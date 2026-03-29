@@ -1,6 +1,7 @@
 import sys
 
 from tax_engine.etrade_download_espp import download_benefit_history
+from tax_engine.etrade_download_options import download_options_confirmations
 from tax_engine.etrade_download_orders import download_orders
 from tax_engine.etrade_download_rsu import download_rsu_confirmations
 from tax_engine.etrade_login import login
@@ -21,8 +22,6 @@ def main() -> None:
         download_benefit_history()
     except Exception as e:
         print(f"ESPP download failed: {e}")
-        # We might want to continue or exit depending on severity.
-        # Usually if one fails, others might still work if session is valid.
 
     print("\n=== Step 3: Download Orders History ===")
     try:
@@ -35,6 +34,12 @@ def main() -> None:
         download_rsu_confirmations()
     except Exception as e:
         print(f"RSU download failed: {e}")
+
+    print("\n=== Step 5: Download Options Confirmations ===")
+    try:
+        download_options_confirmations()
+    except Exception as e:
+        print(f"Options download failed: {e}")
 
     print("\nAll tasks completed.")
 
