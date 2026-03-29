@@ -16,6 +16,7 @@ class EventType(Enum):
     VEST = "VEST"  # RSU vesting - treated as acquisition at market price
     BUY = "BUY"  # ESPP purchase
     SELL = "SELL"  # Manual sell or sell-to-cover
+    EXERCISE = "EXERCISE"  # Stock option exercise - cost basis = FMV at exercise
 
 
 @dataclass

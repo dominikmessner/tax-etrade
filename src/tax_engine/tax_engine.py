@@ -59,6 +59,7 @@ class TaxEngine:
             type_priority = {
                 EventType.VEST: 0,
                 EventType.BUY: 1,
+                EventType.EXERCISE: 1,
                 EventType.SELL: 2,
             }
             return (event.event_date, type_priority[event.event_type])
@@ -153,7 +154,7 @@ class TaxEngine:
 
     def process_event(self, event: StockEvent) -> ProcessedEvent:
         """Process a single stock event."""
-        if event.event_type in (EventType.VEST, EventType.BUY):
+        if event.event_type in (EventType.VEST, EventType.BUY, EventType.EXERCISE):
             result = self._process_acquisition(event)
         elif event.event_type == EventType.SELL:
             result = self._process_sell(event)
