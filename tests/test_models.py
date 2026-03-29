@@ -130,17 +130,16 @@ class TestStockEvent:
     def test_exercise_event_type(self):
         """EXERCISE event type should be accepted and behave like an acquisition."""
         event = StockEvent(
-            event_date=date(2024, 7, 2),
+            event_date=date(2021, 6, 1),
             event_type=EventType.EXERCISE,
-            shares=Decimal("40"),
-            price_usd=Decimal("45.47"),
-            fx_rate=Decimal("0.9321"),
+            shares=Decimal("100"),
+            price_usd=Decimal("50.00"),
+            fx_rate=Decimal("0.90"),
         )
         assert event.event_type == EventType.EXERCISE
-        # FMV × FX rate = cost basis per share
-        expected_eur = (Decimal("45.47") * Decimal("0.9321")).quantize(Decimal("0.0001"))
-        assert event.price_eur == expected_eur
-        assert event.total_value_eur == expected_eur * Decimal("40")
+        # FMV × FX rate = cost basis per share: $50 * 0.90 = €45
+        assert event.price_eur == Decimal("45.0000")
+        assert event.total_value_eur == Decimal("4500.0000")
 
 
 class TestYearlyTaxSummary:
