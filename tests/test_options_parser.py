@@ -35,18 +35,18 @@ E*TRADE Securities LLC
 
 Stock Option Exercise Confirmation
 
-Exercise Date: 07/02/2024
+Exercise Date: 03/15/2022
 Exercise Type: Cash Exercise         Registration: Individual
-Order Number 12345678
+Order Number 11111111
 
 This confirmation is for your records.
 """
 
 CASH_EXERCISE_TABLES = [
     [
-        ["Shares Exercised", "40"],
-        ["Grant Price", "$16.00"],
-        ["Exercise Market Value", "$45.47"],
+        ["Shares Exercised", "100"],
+        ["Grant Price", "$10.00"],
+        ["Exercise Market Value", "$50.00"],
     ]
 ]
 
@@ -55,20 +55,20 @@ E*TRADE Securities LLC
 
 Stock Option Exercise Confirmation
 
-Exercise Date: 02/06/2025
+Exercise Date: 06/01/2023
 Exercise Type: Same-Day Sale         Registration: Individual
-Order Number 87654321
+Order Number 22222222
 
 This confirmation is for your records.
 """
 
 SAME_DAY_SALE_TABLES = [
     [
-        ["Shares Exercised", "780"],
-        ["Grant Price", "$16.00"],
-        ["Exercise Market Value", "$60.12"],
-        ["Sale Price", "$61.29"],
-        ["Shares Sold", "780"],
+        ["Shares Exercised", "200"],
+        ["Grant Price", "$10.00"],
+        ["Exercise Market Value", "$60.00"],
+        ["Sale Price", "$62.00"],
+        ["Shares Sold", "200"],
     ]
 ]
 
@@ -88,7 +88,7 @@ class TestParseOptionsExerciseCash:
             result = parse_options_pdf(Path("cash_exercise.pdf"))
 
         assert result is not None
-        assert result.exercise_date == date(2024, 7, 2)
+        assert result.exercise_date == date(2022, 3, 15)
 
     def test_parse_cash_exercise_type(self):
         """Exercise type is 'Cash Exercise'."""
@@ -104,7 +104,7 @@ class TestParseOptionsExerciseCash:
         with patch("pdfplumber.open", return_value=mock_pdf):
             result = parse_options_pdf(Path("cash_exercise.pdf"))
 
-        assert result.shares_exercised == Decimal("40")
+        assert result.shares_exercised == Decimal("100")
 
     def test_parse_cash_exercise_fmv(self):
         """FMV (Exercise Market Value) is the cost basis."""
@@ -112,7 +112,7 @@ class TestParseOptionsExerciseCash:
         with patch("pdfplumber.open", return_value=mock_pdf):
             result = parse_options_pdf(Path("cash_exercise.pdf"))
 
-        assert result.fmv_usd == Decimal("45.47")
+        assert result.fmv_usd == Decimal("50.00")
 
     def test_parse_cash_exercise_grant_price(self):
         """Strike (grant) price is correctly extracted."""
@@ -120,7 +120,7 @@ class TestParseOptionsExerciseCash:
         with patch("pdfplumber.open", return_value=mock_pdf):
             result = parse_options_pdf(Path("cash_exercise.pdf"))
 
-        assert result.grant_price_usd == Decimal("16.00")
+        assert result.grant_price_usd == Decimal("10.00")
 
     def test_parse_cash_exercise_no_sale_fields(self):
         """Cash exercise has no sale price or shares sold."""
@@ -137,7 +137,7 @@ class TestParseOptionsExerciseCash:
         with patch("pdfplumber.open", return_value=mock_pdf):
             result = parse_options_pdf(Path("cash_exercise.pdf"))
 
-        assert result.order_number == "12345678"
+        assert result.order_number == "11111111"
 
     def test_parse_cash_exercise_source_file(self):
         """Source file name is stored on the result."""
@@ -171,8 +171,8 @@ class TestParseOptionsSameDaySale:
         with patch("pdfplumber.open", return_value=mock_pdf):
             result = parse_options_pdf(Path("same_day_sale.pdf"))
 
-        assert result.shares_exercised == Decimal("780")
-        assert result.shares_sold == Decimal("780")
+        assert result.shares_exercised == Decimal("200")
+        assert result.shares_sold == Decimal("200")
 
     def test_parse_same_day_sale_price(self):
         """Sale price is extracted for same-day sales."""
@@ -180,7 +180,7 @@ class TestParseOptionsSameDaySale:
         with patch("pdfplumber.open", return_value=mock_pdf):
             result = parse_options_pdf(Path("same_day_sale.pdf"))
 
-        assert result.sale_price_usd == Decimal("61.29")
+        assert result.sale_price_usd == Decimal("62.00")
 
     def test_parse_same_day_sale_fmv(self):
         """FMV at exercise is correctly extracted as cost basis."""
@@ -188,7 +188,7 @@ class TestParseOptionsSameDaySale:
         with patch("pdfplumber.open", return_value=mock_pdf):
             result = parse_options_pdf(Path("same_day_sale.pdf"))
 
-        assert result.fmv_usd == Decimal("60.12")
+        assert result.fmv_usd == Decimal("60.00")
 
 
 # =============================================================================
@@ -224,8 +224,8 @@ class TestParseOptionsPdfInvalidCases:
         """PDF without Exercise Market Value returns None."""
         tables_without_fmv = [
             [
-                ["Shares Exercised", "40"],
-                ["Grant Price", "$16.00"],
+                ["Shares Exercised", "100"],
+                ["Grant Price", "$10.00"],
                 # No "Exercise Market Value" row
             ]
         ]
@@ -239,8 +239,8 @@ class TestParseOptionsPdfInvalidCases:
         """PDF without Shares Exercised returns None."""
         tables_without_shares = [
             [
-                ["Grant Price", "$16.00"],
-                ["Exercise Market Value", "$45.47"],
+                ["Grant Price", "$10.00"],
+                ["Exercise Market Value", "$50.00"],
                 # No "Shares Exercised" row
             ]
         ]
@@ -263,7 +263,7 @@ class TestParseOptionsPdfInvalidCases:
         tables = [
             [
                 ["Shares Exercised", "1,000"],
-                ["Grant Price", "$16.00"],
+                ["Grant Price", "$10.00"],
                 ["Exercise Market Value", "$1,234.56"],
             ]
         ]
@@ -315,10 +315,10 @@ class TestLoadOptionsEvents:
         # Return different dates depending on filename
         def mock_open(path):
             if "a.pdf" in str(path):
-                text = SAME_DAY_SALE_TEXT  # 2025-02-06
+                text = SAME_DAY_SALE_TEXT  # 2023-06-01
                 tables = SAME_DAY_SALE_TABLES
             else:
-                text = CASH_EXERCISE_TEXT  # 2024-07-02
+                text = CASH_EXERCISE_TEXT  # 2022-03-15
                 tables = CASH_EXERCISE_TABLES
             return _make_mock_pdf(text, tables)
 
@@ -326,8 +326,8 @@ class TestLoadOptionsEvents:
             result = load_options_events(options_dir)
 
         assert len(result) == 2
-        assert result[0].exercise_date == date(2024, 7, 2)  # cash exercise first
-        assert result[1].exercise_date == date(2025, 2, 6)  # same-day sale second
+        assert result[0].exercise_date == date(2022, 3, 15)  # cash exercise first
+        assert result[1].exercise_date == date(2023, 6, 1)  # same-day sale second
 
     def test_load_handles_parsing_failure_gracefully(self, tmp_path):
         """A failed parse of one PDF doesn't prevent loading others."""
@@ -345,4 +345,4 @@ class TestLoadOptionsEvents:
             result = load_options_events(options_dir)
 
         assert len(result) == 1
-        assert result[0].exercise_date == date(2024, 7, 2)
+        assert result[0].exercise_date == date(2022, 3, 15)

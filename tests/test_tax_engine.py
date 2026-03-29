@@ -105,28 +105,28 @@ class TestTaxEngineAcquisition:
         """EXERCISE uses FMV as cost basis, identical to VEST treatment."""
         engine = TaxEngine()
         event = StockEvent(
-            event_date=date(2024, 7, 2),
+            event_date=date(2021, 3, 1),
             event_type=EventType.EXERCISE,
-            shares=Decimal("40"),
-            price_usd=Decimal("45.47"),
-            fx_rate=Decimal("0.9321"),
+            shares=Decimal("100"),
+            price_usd=Decimal("50.00"),
+            fx_rate=Decimal("0.90"),
         )
 
         result = engine.process_event(event)
 
-        fmv_eur = (Decimal("45.47") * Decimal("0.9321")).quantize(Decimal("0.0001"))
-        assert engine.state.total_shares == Decimal("40")
-        assert engine.state.avg_cost_eur == fmv_eur
+        # 100 shares @ $50 * 0.90 = €45 per share
+        assert engine.state.total_shares == Decimal("100")
+        assert engine.state.avg_cost_eur == Decimal("45.0000")
         assert result.realized_gain_loss == Decimal("0")
 
     def test_exercise_updates_moving_average(self):
         """EXERCISE blends into the moving average like any acquisition."""
         engine = TaxEngine()
 
-        # Existing position: 100 shares @ €41
+        # Existing position: 100 shares @ $50 * 0.82 = €41 each
         engine.process_event(
             StockEvent(
-                event_date=date(2024, 1, 1),
+                event_date=date(2021, 1, 1),
                 event_type=EventType.VEST,
                 shares=Decimal("100"),
                 price_usd=Decimal("50.00"),
@@ -134,10 +134,10 @@ class TestTaxEngineAcquisition:
             )
         )
 
-        # Exercise: 50 shares @ FMV €50 (€50 * 1.0 FX)
+        # Exercise: 50 shares @ FMV $50 * 1.00 = €50 each
         engine.process_event(
             StockEvent(
-                event_date=date(2024, 7, 2),
+                event_date=date(2021, 6, 1),
                 event_type=EventType.EXERCISE,
                 shares=Decimal("50"),
                 price_usd=Decimal("50.00"),
@@ -145,7 +145,7 @@ class TestTaxEngineAcquisition:
             )
         )
 
-        # New avg = (100 * 41 + 50 * 50) / 150 = (4100 + 2500) / 150 = 44.00
+        # New avg = (100 * 41 + 50 * 50) / 150 = (4100 + 2500) / 150 = €44.00
         assert engine.state.total_shares == Decimal("150")
         assert engine.state.avg_cost_eur == pytest.approx(Decimal("44.0000"), abs=Decimal("0.0001"))
 
@@ -411,18 +411,18 @@ class TestTaxEngineEventSorting:
         engine = TaxEngine()
         events = [
             StockEvent(
-                event_date=date(2025, 2, 6),
+                event_date=date(2021, 8, 1),
                 event_type=EventType.SELL,  # Listed first — must be sorted after EXERCISE
-                shares=Decimal("780"),
-                price_usd=Decimal("61.29"),
-                fx_rate=Decimal("0.9653"),
+                shares=Decimal("100"),
+                price_usd=Decimal("62.00"),
+                fx_rate=Decimal("0.85"),
             ),
             StockEvent(
-                event_date=date(2025, 2, 6),
+                event_date=date(2021, 8, 1),
                 event_type=EventType.EXERCISE,
-                shares=Decimal("780"),
-                price_usd=Decimal("60.12"),
-                fx_rate=Decimal("0.9653"),
+                shares=Decimal("100"),
+                price_usd=Decimal("60.00"),
+                fx_rate=Decimal("0.85"),
             ),
         ]
 
