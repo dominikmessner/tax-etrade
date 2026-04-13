@@ -110,7 +110,11 @@ def load_orders_from_excel() -> list[StockEvent]:
 
     for i, (_, row) in enumerate(df.iterrows()):
         # Parse date
-        raw_date = row["Order Date"]
+        # Prefer Execution Date (actual trade date) over Order Date (when order was placed).
+        # Older downloads may only have Order Date — fall back gracefully.
+        raw_date = row.get("Execution Date") if "Execution Date" in row.index else None
+        if raw_date is None or pd.isna(raw_date):
+            raw_date = row["Order Date"]
         if hasattr(raw_date, "date"):
             event_date = raw_date.date()
         else:

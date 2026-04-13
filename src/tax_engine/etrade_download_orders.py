@@ -1,3 +1,4 @@
+import contextlib
 import os
 import time
 from pathlib import Path
@@ -9,6 +10,91 @@ SESSION_FILE = "input/etrade_session.json"
 TARGET_URL = "https://us.etrade.com/etx/sp/stockplan#/myAccount/orders"
 OUTPUT_DIR = Path("input/orders")
 OUTPUT_FILE = OUTPUT_DIR / "orders.xlsx"
+
+
+def _get_execution_date(row, order_date: str, page) -> str:  # type: ignore[no-untyped-def]
+    """Click the row to expand its detail, read execution dates from Order History,
+    verify they all fall on the same calendar date, and return that date string.
+    Falls back to order_date if anything goes wrong.
+
+    HTML structure (from DevTools inspection):
+      div[data-test-id="orders.ordertbl.odrhistoryexpand"]
+        button[aria-expanded]   ← collapse/expand toggle
+        div.collapse.in
+          table[role="table"]
+            tbody[role="rowgroup"]
+              tr[role="row"]
+                td.text-left[role="cell"]  ← "Order Placed" / "Order Executed"
+                td.text-left[role="cell"]  ← "11/17/2025 09:30:00 AM ET"
+                td.text-left[role="cell"]  ← sale quantity
+                td.text-left[role="cell"]  ← price
+    """
+    # Click the expand chevron in the first cell of the row
+    try:
+        row.locator("td").first.click()
+    except Exception as e:
+        print(f"  WARNING: Could not click row to expand detail: {e}")
+        return order_date
+
+    # Wait for the Order History div to become visible
+    order_history_div = page.locator('div[data-test-id="orders.ordertbl.odrhistoryexpand"]')
+    try:
+        order_history_div.wait_for(state="visible", timeout=5000)
+    except Exception as e:
+        print(f"  WARNING: Order History section did not appear: {e}")
+        with contextlib.suppress(Exception):
+            row.locator("td").first.click()
+        return order_date
+
+    # Find all "Order Executed" cells inside the Order History table
+    try:
+        executed_cells = (
+            order_history_div.locator('td[role="cell"]').filter(has_text="Order Executed").all()
+        )
+    except Exception as e:
+        print(f"  WARNING: Could not find Order Executed cells: {e}")
+        with contextlib.suppress(Exception):
+            row.locator("td").first.click()
+        return order_date
+
+    if not executed_cells:
+        print(
+            f"  WARNING: No 'Order Executed' entries found for order dated {order_date}, using Order Date."
+        )
+        with contextlib.suppress(Exception):
+            row.locator("td").first.click()
+        return order_date
+
+    # Extract the date part (MM/DD/YYYY) from the adjacent "Date & Time" cell
+    exec_dates: list[str] = []
+    for exec_cell in executed_cells:
+        try:
+            # Date & Time is the immediately following sibling td
+            date_text = exec_cell.locator("xpath=following-sibling::td[1]").inner_text().strip()
+            # Format: "12/08/2025 02:52:41 PM ET" — take only the date part
+            exec_dates.append(date_text.split()[0])
+        except Exception as e:
+            print(f"  WARNING: Could not read execution date cell: {e}")
+
+    # Collapse the detail row again
+    with contextlib.suppress(Exception):
+        row.locator("td").first.click()
+
+    if not exec_dates:
+        print(
+            f"  WARNING: Could not parse any execution dates for order {order_date}, using Order Date."
+        )
+        return order_date
+
+    unique_dates = set(exec_dates)
+    if len(unique_dates) > 1:
+        print(
+            f"  WARNING: Order placed on {order_date} has executions on MULTIPLE dates: "
+            f"{sorted(unique_dates)}. Using the first execution date. "
+            f"This order may need manual review."
+        )
+
+    return exec_dates[0]
 
 
 def download_orders() -> None:
@@ -80,7 +166,7 @@ def download_orders() -> None:
         print(f"Found {len(rows)} rows.")
 
         data = []
-        for row in rows:
+        for i, row in enumerate(rows):
             # Skip if it's not a data row (e.g. if there are spacer rows, though the HTML showed spTableRow)
             # The HTML shows class="spTableRow"
 
@@ -99,12 +185,17 @@ def download_orders() -> None:
             sold_qty = cells[8].inner_text().strip()
             exec_price = cells[9].inner_text().strip()
 
-            # Only keep rows that have valid data (e.g. Sold Qty > 0)
-            # But maybe we want all orders. The user asked for "Sell orders".
-            # Let's just grab everything for now and filter later if needed.
+            print(
+                f"  Row {i + 1}: {benefit_type} {order_date} qty={sold_qty} — fetching execution date..."
+            )
+            execution_date = _get_execution_date(row, order_date, page)
+
+            if execution_date != order_date:
+                print(f"    Order Date: {order_date}  →  Execution Date: {execution_date}")
 
             data.append(
                 {
+                    "Execution Date": execution_date,
                     "Order Date": order_date,
                     "Sold Qty.": sold_qty,
                     "Execution Price": exec_price,
