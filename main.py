@@ -6,6 +6,10 @@ Calculates capital gains tax using the Austrian moving average cost basis method
 (Gleitender Durchschnittspreis) for stocks acquired through RSU vesting and ESPP purchases.
 
 Main entry point for the application.
+
+Usage:
+    uv run main.py              # Process all years
+    uv run main.py --year 2025  # Filter to a specific year
 """
 
 import sys

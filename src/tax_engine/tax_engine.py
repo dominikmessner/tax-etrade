@@ -197,10 +197,25 @@ class TaxEngine:
         """Get all yearly tax summaries, sorted by year."""
         return sorted(self.yearly_summaries.values(), key=lambda s: s.year)
 
-    def print_ledger(self) -> None:
-        """Print the full transaction ledger in a readable format."""
+    def print_ledger(self, year: int | None = None) -> None:
+        """Print the full transaction ledger in a readable format.
+        
+        Args:
+            year: Optional year filter. If provided, only show transactions from that year.
+        """
+        # Filter events by year if specified
+        events_to_print = self.processed_events
+        if year is not None:
+            events_to_print = [
+                pe for pe in self.processed_events
+                if pe.event.event_date.year == year
+            ]
+
         print("\n" + "=" * 120)
-        print("TRANSACTION LEDGER")
+        if year:
+            print(f"TRANSACTION LEDGER - {year}")
+        else:
+            print("TRANSACTION LEDGER")
         print("=" * 120)
         print(
             f"{'Date':<12} {'Type':<6} {'Shares':>10} {'Price USD':>12} "
@@ -209,7 +224,7 @@ class TaxEngine:
         )
         print("-" * 120)
 
-        for pe in self.processed_events:
+        for pe in events_to_print:
             e = pe.event
             shares_sign = "+" if e.event_type != EventType.SELL else "-"
             shares_str = f"{shares_sign}{e.shares:,.0f}"
@@ -225,10 +240,24 @@ class TaxEngine:
 
         print("=" * 120)
 
-    def print_tax_summary(self) -> None:
-        """Print the yearly tax summary."""
+    def print_tax_summary(self, year: int | None = None) -> None:
+        """Print the yearly tax summary.
+        
+        Args:
+            year: Optional year filter. If provided, only show that year's summary.
+        """
+        # Get all summaries and filter if needed
+        all_summaries = self.get_all_yearly_summaries()
+        if year is not None:
+            summaries_to_print = [s for s in all_summaries if s.year == year]
+        else:
+            summaries_to_print = all_summaries
+
         print("\n" + "=" * 80)
-        print("YEARLY TAX SUMMARY")
+        if year:
+            print(f"YEARLY TAX SUMMARY - {year}")
+        else:
+            print("YEARLY TAX SUMMARY")
         print("=" * 80)
         print(
             f"{'Year':<8} {'Gains':>15} {'Losses':>15} "
@@ -236,7 +265,7 @@ class TaxEngine:
         )
         print("-" * 80)
 
-        for summary in self.get_all_yearly_summaries():
+        for summary in summaries_to_print:
             print(
                 f"{summary.year:<8} €{summary.total_gains:>14,.2f} "
                 f"€{summary.total_losses:>14,.2f} €{summary.net_gain_loss:>14,.2f} "
@@ -250,14 +279,18 @@ class TaxEngine:
         print("-" * 80)
         print("Enter the following values in FinanzOnline for each tax year:")
         print()
-        for summary in self.get_all_yearly_summaries():
+        for summary in summaries_to_print:
             print(f"  Year {summary.year}:")
             print(f"    Kennzahl 994 (Gains):  €{summary.total_gains:>12,.2f}")
             print(f"    Kennzahl 892 (Losses): €{summary.total_losses:>12,.2f}")
             print()
 
-    def generate_html_content(self) -> str:
-        """Generate HTML content for the tax report."""
+    def generate_html_content(self, year: int | None = None) -> str:
+        """Generate HTML content for the tax report.
+        
+        Args:
+            year: Optional year filter. If provided, only include that year's data.
+        """
         html = []
         html.append("<html><head><style>")
         html.append(
@@ -274,7 +307,10 @@ class TaxEngine:
         html.append("code { background-color: #f4f4f4; padding: 2px 4px; border-radius: 4px; }")
         html.append("</style></head><body>")
 
-        html.append("<h1>Austrian Tax Report</h1>")
+        if year:
+            html.append(f"<h1>Austrian Tax Report - {year}</h1>")
+        else:
+            html.append("<h1>Austrian Tax Report</h1>")
         html.append(f"<p>Generated on: {date.today().isoformat()}</p>")
 
         html.append("<h2>Methodology</h2>")
@@ -294,13 +330,20 @@ class TaxEngine:
         )
         html.append("</ul>")
 
+        # Filter summaries by year if specified
+        all_summaries = self.get_all_yearly_summaries()
+        if year is not None:
+            summaries_to_include = [s for s in all_summaries if s.year == year]
+        else:
+            summaries_to_include = all_summaries
+
         html.append("<h2>Yearly Tax Summary</h2>")
         html.append("<table>")
         html.append(
             "<tr><th>Year</th><th>Total Gains</th><th>Total Losses</th><th>Net Gain/Loss</th><th>Taxable Amount</th><th>KESt Due (27.5%)</th></tr>"
         )
 
-        for summary in self.get_all_yearly_summaries():
+        for summary in summaries_to_include:
             net_style = "gain" if summary.net_gain_loss >= 0 else "loss"
             html.append("<tr>")
             html.append(f"<td>{summary.year}</td>")
@@ -322,7 +365,7 @@ class TaxEngine:
         html.append(
             "<tr><th>Year</th><th>Kennzahl 994 (Gains)</th><th>Kennzahl 892 (Losses)</th></tr>"
         )
-        for summary in self.get_all_yearly_summaries():
+        for summary in summaries_to_include:
             html.append("<tr>")
             html.append(f"<td>{summary.year}</td>")
             html.append(f"<td>€{summary.total_gains:,.2f}</td>")
@@ -334,6 +377,14 @@ class TaxEngine:
             "Kennzahl 892 = total realized losses (entered as a negative number).</em></p>"
         )
 
+        # Filter events by year if specified
+        events_to_include = self.processed_events
+        if year is not None:
+            events_to_include = [
+                pe for pe in self.processed_events
+                if pe.event.event_date.year == year
+            ]
+
         html.append("<h2>Detailed Transaction Ledger</h2>")
         html.append(
             "<p>The following table documents every transaction and its effect on the portfolio cost basis.</p>"
@@ -344,7 +395,7 @@ class TaxEngine:
             "<tr><th>Date</th><th>Type</th><th>Shares</th><th>Price (USD)</th><th>FX Rate</th><th>Price (EUR)</th><th>Total Value (EUR)</th><th>Portfolio Qty</th><th>Avg Cost (EUR)</th><th>Realized G/L (EUR)</th></tr>"
         )
 
-        for pe in self.processed_events:
+        for pe in events_to_include:
             e = pe.event
             shares_sign = "+" if e.event_type != EventType.SELL else "-"
             shares_str = f"{shares_sign}{e.shares:,.0f}"
@@ -372,7 +423,14 @@ class TaxEngine:
         html.append("<h2>Calculation Details for Sales</h2>")
         html.append("<p>For every SELL transaction, the gain/loss is calculated as follows:</p>")
 
-        sell_events = [pe for pe in self.processed_events if pe.event.event_type == EventType.SELL]
+        # Filter sell events by year if specified
+        if year is not None:
+            sell_events = [
+                pe for pe in self.processed_events
+                if pe.event.event_type == EventType.SELL and pe.event.event_date.year == year
+            ]
+        else:
+            sell_events = [pe for pe in self.processed_events if pe.event.event_type == EventType.SELL]
         if not sell_events:
             html.append("<p><em>No sales transactions found.</em></p>")
 
@@ -400,8 +458,13 @@ class TaxEngine:
         html.append("</body></html>")
         return "".join(html)
 
-    def generate_pdf_report(self, filepath: str) -> None:
-        """Generate a PDF tax report using Playwright."""
+    def generate_pdf_report(self, filepath: str, year: int | None = None) -> None:
+        """Generate a PDF tax report using Playwright.
+        
+        Args:
+            filepath: Path where the PDF should be saved.
+            year: Optional year filter. If provided, only include that year's data.
+        """
         try:
             from playwright.sync_api import sync_playwright
         except ImportError:
@@ -409,7 +472,7 @@ class TaxEngine:
             print("Please install it with: pip install playwright && playwright install")
             return
 
-        html_content = self.generate_html_content()
+        html_content = self.generate_html_content(year=year)
 
         try:
             with sync_playwright() as p:
