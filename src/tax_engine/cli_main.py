@@ -7,6 +7,7 @@ Calculates capital gains tax using the Austrian moving average cost basis method
 Main entry point for the application.
 """
 
+import argparse
 from datetime import date, datetime
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
@@ -206,8 +207,22 @@ def load_options_stock_events() -> list[StockEvent]:
 
 def main() -> None:
     """Run the tax engine with actual data from Excel files."""
+    # Parse command-line arguments
+    parser = argparse.ArgumentParser(
+        description="Austrian Tax Engine for E-Trade RSUs and ESPP"
+    )
+    parser.add_argument(
+        "--year",
+        type=int,
+        default=None,
+        help="Filter output to a specific tax year (e.g., --year 2025)",
+    )
+    args = parser.parse_args()
+
     print("Austrian Tax Engine for E-Trade RSUs and ESPP")
     print("Using Moving Average Cost Basis (Gleitender Durchschnittspreis)")
+    if args.year:
+        print(f"Filtering to year: {args.year}")
     print()
 
     # Load events from Excel file
@@ -241,20 +256,35 @@ def main() -> None:
     engine = TaxEngine()
     engine.process_all(events)
 
-    # Print results
-    engine.print_ledger()
-    engine.print_tax_summary()
+    # Validate year filter if provided
+    if args.year:
+        if args.year not in engine.yearly_summaries:
+            available_years = sorted(engine.yearly_summaries.keys())
+            print(f"\nError: No data found for year {args.year}")
+            if available_years:
+                print(f"Available years: {', '.join(map(str, available_years))}")
+            else:
+                print("No tax data available (no sales transactions processed)")
+            return
 
-    # Show current state
-    print(f"\nCurrent Position: {engine.state.total_shares} shares")
-    print(f"Current Avg Cost: €{engine.state.avg_cost_eur:,.4f}")
-    print(f"Total Portfolio Cost: €{engine.state.total_portfolio_cost_eur:,.4f}")
+    # Print results
+    engine.print_ledger(year=args.year)
+    engine.print_tax_summary(year=args.year)
+
+    # Show current state (only if not filtering by year)
+    if not args.year:
+        print(f"\nCurrent Position: {engine.state.total_shares} shares")
+        print(f"Current Avg Cost: €{engine.state.avg_cost_eur:,.4f}")
+        print(f"Total Portfolio Cost: €{engine.state.total_portfolio_cost_eur:,.4f}")
 
     # Generate PDF report
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    pdf_path = f"tax_report_{timestamp}.pdf"
-    print(f"Generating PDF report at: {pdf_path}...")
-    engine.generate_pdf_report(pdf_path)
+    if args.year:
+        pdf_path = f"tax_report_{args.year}_{timestamp}.pdf"
+    else:
+        pdf_path = f"tax_report_{timestamp}.pdf"
+    print(f"\nGenerating PDF report at: {pdf_path}...")
+    engine.generate_pdf_report(pdf_path, year=args.year)
     print("PDF generation complete.")
 
 
