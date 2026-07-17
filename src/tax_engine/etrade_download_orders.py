@@ -2,7 +2,8 @@ import contextlib
 import os
 import time
 from pathlib import Path
-from datetime import date
+import shutil
+from datetime import date, datetime
 
 import pandas as pd
 from playwright.sync_api import sync_playwright
@@ -12,6 +13,12 @@ TARGET_URL = "https://us.etrade.com/etx/sp/stockplan#/myAccount/orders"
 OUTPUT_DIR = Path("input/orders")
 OUTPUT_FILE = OUTPUT_DIR / "orders.xlsx"
 
+def backup_existing_file(file_path: Path) -> None:
+    if file_path.exists():
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        backup_path = file_path.with_name(f"{file_path.stem}_{timestamp}{file_path.suffix}")
+        print(f"Backing up existing file to {backup_path}")
+        shutil.move(str(file_path), str(backup_path))
 
 def _get_execution_date(row, order_date: str, page) -> str:  # type: ignore[no-untyped-def]
     """Click the row to expand its detail, read execution dates from Order History,
@@ -218,6 +225,10 @@ def download_orders() -> None:
         if data:
             df = pd.DataFrame(data)
             OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+
+            # Backup existing file
+            backup_existing_file(OUTPUT_FILE)
+
             df.to_excel(OUTPUT_FILE, index=False)
             print(f"Saved orders to {OUTPUT_FILE}")
         else:
