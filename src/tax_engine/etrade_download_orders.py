@@ -39,7 +39,7 @@ def _get_execution_date(row, order_date: str, page) -> str:  # type: ignore[no-u
     # Wait for the Order History div to become visible
     order_history_div = page.locator('div[data-test-id="orders.ordertbl.odrhistoryexpand"]')
     try:
-        order_history_div.wait_for(state="visible", timeout=5000)
+        order_history_div.wait_for(state="visible", timeout=60000)
     except Exception as e:
         print(f"  WARNING: Order History section did not appear: {e}")
         with contextlib.suppress(Exception):
