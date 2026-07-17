@@ -2,6 +2,8 @@ import contextlib
 import os
 import time
 from pathlib import Path
+import shutil
+from datetime import date, datetime
 
 import pandas as pd
 from playwright.sync_api import sync_playwright
@@ -11,6 +13,12 @@ TARGET_URL = "https://us.etrade.com/etx/sp/stockplan#/myAccount/orders"
 OUTPUT_DIR = Path("input/orders")
 OUTPUT_FILE = OUTPUT_DIR / "orders.xlsx"
 
+def backup_existing_file(file_path: Path) -> None:
+    if file_path.exists():
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        backup_path = file_path.with_name(f"{file_path.stem}_{timestamp}{file_path.suffix}")
+        print(f"Backing up existing file to {backup_path}")
+        shutil.move(str(file_path), str(backup_path))
 
 def _get_execution_date(row, order_date: str, page) -> str:  # type: ignore[no-untyped-def]
     """Click the row to expand its detail, read execution dates from Order History,
@@ -39,7 +47,7 @@ def _get_execution_date(row, order_date: str, page) -> str:  # type: ignore[no-u
     # Wait for the Order History div to become visible
     order_history_div = page.locator('div[data-test-id="orders.ordertbl.odrhistoryexpand"]')
     try:
-        order_history_div.wait_for(state="visible", timeout=5000)
+        order_history_div.wait_for(state="visible", timeout=60000)
     except Exception as e:
         print(f"  WARNING: Order History section did not appear: {e}")
         with contextlib.suppress(Exception):
@@ -103,117 +111,128 @@ def download_orders() -> None:
         return
 
     with sync_playwright() as p:
-        browser = p.chromium.launch(headless=False)
-
-        try:
-            context = browser.new_context(storage_state=SESSION_FILE)
-        except Exception as e:
-            print(f"Error loading session: {e}")
-            return
-
-        page = context.new_page()
-        print(f"Navigating to {TARGET_URL}")
-        page.goto(TARGET_URL)
-
-        # Wait for page load
-        try:
-            page.wait_for_url(lambda url: "orders" in url and "login" not in url, timeout=10000)
-            page.locator('[data-test-id="orders.year"]').wait_for(timeout=10000)
-        except Exception:
-            print("Login session might be expired or page load failed.")
-            browser.close()
-            return
-
-        print("Setting filters...")
-        # Select Custom Year
-        page.locator('[data-test-id="orders.year"]').get_by_label("Year").select_option("Custom")
-
-        # Set Start Date
-        # We need to be careful with date pickers. The user suggested clicking/dblclicking/filling.
-        start_date_input = page.get_by_role("textbox", name="Start date (format: MM/DD/YY)")
-        start_date_input.click()
-        start_date_input.dblclick()  # Select all existing text
-        start_date_input.fill("01/01/19")
-
-        # Click Apply
-        page.locator('[data-test-id="Filter applybtn"]').click()
-
-        # Wait for results to update
-        for _ in range(30):
-            displays = page.locator(".spinner-overlay-spinner").evaluate_all(
-                "elements => elements.map(e => window.getComputedStyle(e).display)"
-            )
-            if all(d == "none" for d in displays):
-                break
-            time.sleep(1)
-
-        # Click View All if available
-        try:
-            view_all_btn = page.get_by_role("button", name="View All", exact=True)
-            if view_all_btn.is_visible():
-                print("Clicking 'View All'...")
-                view_all_btn.click()
-                # Wait for table to expand.
-                # We can wait for the "Viewing X of X" text or just a static wait for now.
-                time.sleep(3)
-        except Exception as e:
-            print(f"View All button not found or not clickable: {e}")
-
-        print("Scraping table data...")
-
-        # Extract data
-        rows = page.locator("table[role='table'] tbody tr").all()
-        print(f"Found {len(rows)} rows.")
-
         data = []
-        for i, row in enumerate(rows):
-            # Skip if it's not a data row (e.g. if there are spacer rows, though the HTML showed spTableRow)
-            # The HTML shows class="spTableRow"
+        for year in range(2019, date.today().year + 1):
+            browser = p.chromium.launch(headless=False)
 
-            cells = row.locator("td").all()
-            if len(cells) < 10:
-                continue
+            try:
+                context = browser.new_context(storage_state=SESSION_FILE)
+            except Exception as e:
+                print(f"Error loading session: {e}")
+                return
 
-            # Indices (0-based from locator list):
-            # Benefit Type: 1
-            # Order Date: 2
-            # Sold Qty: 8
-            # Execution Price: 9
+            page = context.new_page()
+            print(f"Navigating to {TARGET_URL}")
+            page.goto(TARGET_URL)
 
-            benefit_type = cells[1].inner_text().strip()
-            order_date = cells[2].inner_text().strip()
-            sold_qty = cells[8].inner_text().strip()
-            exec_price = cells[9].inner_text().strip()
+            # Wait for page load
+            try:
+                page.wait_for_url(lambda url: "orders" in url and "login" not in url, timeout=10000)
+                page.locator('[data-test-id="orders.year"]').wait_for(timeout=10000)
+            except Exception:
+                print("Login session might be expired or page load failed.")
+                browser.close()
+                return
 
-            print(
-                f"  Row {i + 1}: {benefit_type} {order_date} qty={sold_qty} — fetching execution date..."
-            )
-            execution_date = _get_execution_date(row, order_date, page)
+            print("Setting filters for year " + str(year) + "...")
+            # Select Custom Year
+            page.locator('[data-test-id="orders.year"]').get_by_label("Year").select_option("Custom")
 
-            if execution_date != order_date:
-                print(f"    Order Date: {order_date}  →  Execution Date: {execution_date}")
+            # Set Start Date
+            # We need to be careful with date pickers. The user suggested clicking/dblclicking/filling.
+            start_date_input = page.get_by_role("textbox", name="Start date (format: MM/DD/YY)")
+            start_date_input.click()
+            start_date_input.dblclick()  # Select all existing text
+            start_date_input.fill("01/01/" + str(year - 2000))
 
-            data.append(
-                {
-                    "Execution Date": execution_date,
-                    "Order Date": order_date,
-                    "Sold Qty.": sold_qty,
-                    "Execution Price": exec_price,
-                    "Benefit Type": benefit_type,
-                }
-            )
+            # Set End Date
+            end_date_input = page.get_by_role("textbox", name="End date (format: MM/DD/YY)")
+            end_date_input.click()
+            end_date_input.dblclick()  # Select all existing text
+            end_date_input.fill("12/31/" + str(year - 2000))
+
+            # Click Apply
+            page.locator('[data-test-id="Filter applybtn"]').click()
+
+            # Wait for results to update
+            for _ in range(30):
+                displays = page.locator(".spinner-overlay-spinner").evaluate_all(
+                    "elements => elements.map(e => window.getComputedStyle(e).display)"
+                )
+                if all(d == "none" for d in displays):
+                    break
+                time.sleep(1)
+
+            # Click View All if available
+            try:
+                view_all_btn = page.get_by_role("button", name="View All", exact=True)
+                if view_all_btn.is_visible():
+                    print("Clicking 'View All'...")
+                    view_all_btn.click()
+                    # Wait for table to expand.
+                    # We can wait for the "Viewing X of X" text or just a static wait for now.
+                    time.sleep(3)
+            except Exception as e:
+                print(f"View All button not found or not clickable: {e}")
+
+            print("Scraping table data...")
+
+            # Extract data
+            rows = page.locator("table[role='table'] tbody tr").all()
+            print(f"Found {len(rows)} rows.")
+
+            for i, row in enumerate(rows):
+                # Skip if it's not a data row (e.g. if there are spacer rows, though the HTML showed spTableRow)
+                # The HTML shows class="spTableRow"
+
+                cells = row.locator("td").all()
+                if len(cells) < 10:
+                    continue
+
+                # Indices (0-based from locator list):
+                # Benefit Type: 1
+                # Order Date: 2
+                # Sold Qty: 8
+                # Execution Price: 9
+
+                benefit_type = cells[1].inner_text().strip()
+                order_date = cells[2].inner_text().strip()
+                sold_qty = cells[8].inner_text().strip()
+                exec_price = cells[9].inner_text().strip()
+
+                print(
+                    f"  Row {i + 1}: {benefit_type} {order_date} qty={sold_qty} — fetching execution date..."
+                )
+                execution_date = _get_execution_date(row, order_date, page)
+
+                if execution_date != order_date:
+                    print(f"    Order Date: {order_date}  →  Execution Date: {execution_date}")
+
+                data.append(
+                    {
+                        "Execution Date": execution_date,
+                        "Order Date": order_date,
+                        "Sold Qty.": sold_qty,
+                        "Execution Price": exec_price,
+                        "Benefit Type": benefit_type,
+                    }
+                )
+
+            browser.close()
 
         print(f"Extracted {len(data)} records.")
 
         if data:
             df = pd.DataFrame(data)
             OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+
+            # Backup existing file
+            backup_existing_file(OUTPUT_FILE)
+
             df.to_excel(OUTPUT_FILE, index=False)
             print(f"Saved orders to {OUTPUT_FILE}")
         else:
             print("No data found.")
-
-        browser.close()
 
 
 if __name__ == "__main__":
