@@ -7,7 +7,6 @@ external dependencies and private data exposure.
 
 from datetime import date
 from decimal import Decimal
-from unittest.mock import patch
 
 import pytest
 
@@ -153,62 +152,6 @@ def multi_year_events():
             notes="2022 Sale - Loss",
         ),
     ]
-
-
-# =============================================================================
-# Mock ECB Rate Fetcher
-# =============================================================================
-
-
-@pytest.fixture
-def mock_ecb_rate():
-    """
-    Mock ECB rate fetcher that returns a fixed rate.
-
-    Usage:
-        def test_something(mock_ecb_rate):
-            mock_ecb_rate(Decimal("0.85"))
-            # Now any ECB rate lookup returns 0.85
-    """
-
-    def _mock_rate(rate: Decimal):
-        with patch("tax_engine.ecb_rates.ECBRateFetcher.get_rate") as mock:
-            mock.return_value = rate
-            return mock
-
-    return _mock_rate
-
-
-@pytest.fixture
-def mock_ecb_rates_by_date():
-    """
-    Mock ECB rate fetcher that returns different rates by date.
-
-    Usage:
-        def test_something(mock_ecb_rates_by_date):
-            rates = {
-                date(2021, 5, 17): Decimal("0.82"),
-                date(2021, 6, 1): Decimal("0.85"),
-            }
-            mock_ecb_rates_by_date(rates)
-    """
-
-    def _mock_rates(rates_dict: dict):
-        def get_rate_side_effect(target_date):
-            if target_date in rates_dict:
-                return rates_dict[target_date]
-            # Fallback: find closest date before
-            available = sorted([d for d in rates_dict if d <= target_date], reverse=True)
-            if available:
-                return rates_dict[available[0]]
-            raise ValueError(f"No rate for {target_date}")
-
-        patcher = patch(
-            "tax_engine.models.ECBRateFetcher.get_rate", side_effect=get_rate_side_effect
-        )
-        return patcher.start()
-
-    return _mock_rates
 
 
 # =============================================================================

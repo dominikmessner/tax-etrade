@@ -1,15 +1,26 @@
-import os
+"""
+Interactive login to E-Trade.
+
+Opens a visible browser for the user to log in (including MFA) and stores the
+resulting cookies/local storage in SESSION_FILE for the download scripts.
+
+The browser is launched with a few settings that make it look like a regular
+desktop Chrome rather than an automated one; without them E-Trade's login
+page tends to refuse to load. See the README for the implications.
+"""
+
 import time
 
 from playwright.sync_api import sync_playwright
 
-SESSION_FILE = "input/etrade_session.json"
-TARGET_URL = "https://us.etrade.com/etx/sp/stockplan#/myAccount/benefitHistory"
+from .etrade_common import SESSION_FILE, STOCKPLAN_BASE_URL
+
+TARGET_URL = STOCKPLAN_BASE_URL + "benefitHistory"
+LOGIN_TIMEOUT_MS = 300_000  # 5 minutes; MFA can take a while
 
 
 def login() -> None:
     with sync_playwright() as p:
-        # Launch browser with anti-detection settings
         browser = p.chromium.launch(
             headless=False,
             args=[
@@ -30,9 +41,9 @@ def login() -> None:
         }
 
         # Load existing session if available
-        if os.path.exists(SESSION_FILE):
+        if SESSION_FILE.exists():
             print(f"Loading session from {SESSION_FILE}")
-            context = browser.new_context(storage_state=SESSION_FILE, **context_options)  # pyright: ignore[reportArgumentType]
+            context = browser.new_context(storage_state=str(SESSION_FILE), **context_options)  # pyright: ignore[reportArgumentType]
         else:
             print("Starting new session")
             context = browser.new_context(**context_options)  # pyright: ignore[reportArgumentType]
@@ -67,12 +78,11 @@ def login() -> None:
             print("Login required. Please log in manually in the browser window.")
             print("Waiting for successful login...")
 
-            # Wait until we are back at the target URL or a similar authenticated page
-            # We use a timeout of 0 (infinite) or a very large number because MFA might take time
             try:
                 page.wait_for_url(
-                    lambda url: "stockplan" in url and "login" not in url, timeout=300000
-                )  # 5 minutes timeout
+                    lambda url: "stockplan" in url and "login" not in url,
+                    timeout=LOGIN_TIMEOUT_MS,
+                )
                 print("Login detected!")
             except Exception:
                 print("Timeout or error waiting for login.")
@@ -81,11 +91,8 @@ def login() -> None:
 
         print("Successfully on the Stock Plan page.")
 
-        # Ensure the input directory exists
-        os.makedirs(os.path.dirname(SESSION_FILE), exist_ok=True)
-
-        # Save the session state
-        context.storage_state(path=SESSION_FILE)
+        SESSION_FILE.parent.mkdir(parents=True, exist_ok=True)
+        context.storage_state(path=str(SESSION_FILE))
         print(f"Session saved to {SESSION_FILE}")
 
         # Keep browser open for a moment to see result

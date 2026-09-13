@@ -93,16 +93,33 @@ To automate downloading transaction history from E-Trade:
     uv run tax-download-espp
     uv run tax-download-orders
     uv run tax-download-rsu
+    uv run tax-download-options
     ```
+
+    The download scripts fetch history from 1 January 2019 onwards. If your plan is older, set `TAX_ENGINE_HISTORY_START` (format `MM/DD/YY`) before running them.
+
+    The downloads land in `input/`:
+
+    | Path | Contents | Required |
+    |------|----------|----------|
+    | `input/espp/BenefitHistory.xlsx` | ESPP purchases | only if you have ESPP |
+    | `input/orders/orders.xlsx` | Sell orders | only if you sold shares |
+    | `input/rsu/*.pdf` | RSU release confirmations | only if you have RSUs |
+    | `input/options/*.pdf` | Options exercise confirmations | only if you have options |
+    | `input/etrade_session.json` | Your logged-in E-Trade session (cookies) | created by `tax-login` |
+
+    Any combination works; the engine simply skips sources that are not present.
 
 ### 4. Run Analysis
 Once your data is in the `input/` directory:
 
 ```bash
-uv run main.py
+uv run main.py                     # all years
+uv run main.py --year 2025         # one tax year
+uv run main.py --input-dir ~/data  # data somewhere else
 ```
 
-It will generate a pdf file tax_report_*.pdf
+It will print the ledger and yearly summary and write `tax_report_*.pdf`. The command exits with a non-zero status if no transactions were found, the requested year has no data, or the PDF could not be written.
 
 ## Filing in FinanzOnline
 
@@ -114,6 +131,13 @@ The tax report output includes the values you need for your Austrian tax return 
 | **892**  | Realized losses from capital assets (Verluste aus Kapitalvermögen) | Total losses for the year (as a negative number) |
 
 These Kennzahlen are shown in both the console output and the generated PDF report.
+
+## About the E-Trade login
+
+`tax-login` opens a real, visible Chromium window for you to sign in (including MFA); the tool never sees your password. Be aware of two things:
+
+- The browser is launched with settings that make it present as an ordinary desktop Chrome (for example hiding the `navigator.webdriver` flag), because E-Trade otherwise refuses to load the login page in an automated browser. Automated access may be restricted by E-Trade's terms of use; you are responsible for deciding whether to use it.
+- The session is stored in `input/etrade_session.json`. That file grants access to your brokerage account for as long as the session is valid. It is excluded from git by `.gitignore`; do not copy it anywhere else and delete it when you are done.
 
 ## How It Works
 

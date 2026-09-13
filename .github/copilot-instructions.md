@@ -14,9 +14,18 @@ This is an **Austrian Tax Engine** that calculates capital gains tax using the *
 
 - **models.py**: Data classes (`StockEvent`, `ProcessedEvent`, `YearlyTaxSummary`, `TaxEngineState`)
 - **tax_engine.py**: Core calculation logic using moving average cost basis
-- **ecb_rates.py**: Fetches USD/EUR rates from ECB Statistical Data Warehouse
-- **rsu_parser.py**: Parses RSU confirmation PDFs using regex
+- **ecb_rates.py**: Fetches USD/EUR rates from the ECB Data Portal; `prefetch_ecb_rates()` pins rates on events
+- **loaders.py**: Turns downloaded Excel/PDF files into `StockEvent`s; every loader takes a path and returns `[]` if it is missing
+- **rsu_parser.py** / **options_parser.py**: Parse confirmation PDFs
+- **report.py**: Shared ledger/summary/PDF flow used by `cli_main.py` and `cli_demo.py`
+- **etrade_common.py**: Shared Playwright plumbing for the `etrade_download_*.py` scrapers
 - **sample_data.py**: Creates sample events for testing/demo
+
+## Conventions
+
+- All money and share amounts are `Decimal`; quantize with `MONEY_PRECISION` and `ROUND_HALF_UP`
+- Tests must not touch the network; pytest turns `LazyFxRateWarning` into an error
+- CLI `main()` functions return an exit code
 
 ## Key Tax Rules (Austrian Law)
 

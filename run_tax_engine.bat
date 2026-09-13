@@ -67,7 +67,7 @@ echo ==========================================
 echo    Austrian Tax Engine for E-Trade
 echo ==========================================
 echo 1. Login to E-Trade (Required first)
-echo 2. Download All Data (ESPP, Orders, RSU)
+echo 2. Download All Data (ESPP, Orders, RSU, Options)
 echo 3. Calculate Tax
 echo 4. Run Demo
 echo 5. Exit

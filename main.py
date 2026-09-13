@@ -23,4 +23,4 @@ if str(src_path) not in sys.path:
 from tax_engine.cli_main import main
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

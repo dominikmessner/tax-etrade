@@ -5,17 +5,35 @@ Implements the moving average cost basis method (Gleitender Durchschnittspreis)
 required by Austrian tax law for calculating capital gains on stocks.
 """
 
-from collections import defaultdict
 from datetime import date
 from decimal import ROUND_HALF_UP, Decimal
 
 from .models import (
+    MONEY_PRECISION,
     EventType,
     ProcessedEvent,
     StockEvent,
     TaxEngineState,
     YearlyTaxSummary,
 )
+
+# Same-day ordering: acquisitions must be applied before sales so that a
+# sell-to-cover on vest day has inventory to sell from.
+_EVENT_TYPE_PRIORITY: dict[EventType, int] = {
+    EventType.VEST: 0,
+    EventType.BUY: 1,
+    EventType.EXERCISE: 1,
+    EventType.SELL: 2,
+}
+
+# Share counts from RSU confirmations carry four decimals, so a residual
+# position smaller than this is rounding noise rather than a real holding.
+_ZERO_POSITION_THRESHOLD = MONEY_PRECISION
+
+
+def event_sort_key(event: StockEvent) -> tuple[date, int]:
+    """Sort key placing events in chronological order, acquisitions before sales."""
+    return (event.event_date, _EVENT_TYPE_PRIORITY[event.event_type])
 
 
 class TaxEngine:
@@ -34,15 +52,13 @@ class TaxEngine:
     def __init__(self) -> None:
         self.state = TaxEngineState()
         self.processed_events: list[ProcessedEvent] = []
-        self.yearly_summaries: dict[int, YearlyTaxSummary] = defaultdict(
-            lambda: YearlyTaxSummary(year=0)
-        )
+        self.yearly_summaries: dict[int, YearlyTaxSummary] = {}
 
     def reset(self) -> None:
         """Reset the engine to initial state."""
         self.state = TaxEngineState()
         self.processed_events = []
-        self.yearly_summaries = defaultdict(lambda: YearlyTaxSummary(year=0))
+        self.yearly_summaries = {}
 
     def _sort_events(self, events: list[StockEvent]) -> list[StockEvent]:
         """
@@ -52,47 +68,37 @@ class TaxEngine:
         on the same day (common with sell-to-cover), the VEST must be
         processed first.
         """
-
-        def sort_key(event: StockEvent) -> tuple[date, int]:
-            # Primary: date
-            # Secondary: event type priority (VEST=0, BUY=1, SELL=2)
-            type_priority = {
-                EventType.VEST: 0,
-                EventType.BUY: 1,
-                EventType.EXERCISE: 1,
-                EventType.SELL: 2,
-            }
-            return (event.event_date, type_priority[event.event_type])
-
-        return sorted(events, key=sort_key)
+        return sorted(events, key=event_sort_key)
 
     def _process_acquisition(self, event: StockEvent) -> ProcessedEvent:
         """
-        Process a BUY or VEST event.
+        Process a BUY, VEST or EXERCISE event.
 
         Updates the moving average cost basis using the formula:
         new_avg = (old_total_cost + new_cost) / (old_shares + new_shares)
+
+        ``total_portfolio_cost_eur`` is the single source of truth for the
+        portfolio's cost; the average is derived from it rather than the other
+        way round, so the two can never drift apart through rounding.
         """
+        avg_before = self.state.avg_cost_eur
         new_cost_eur = event.total_value_eur
         new_shares = event.shares
 
-        # Calculate new average cost (moving average formula)
-        old_total_cost = self.state.total_shares * self.state.avg_cost_eur
-        new_total_cost = old_total_cost + new_cost_eur
+        new_total_cost = self.state.total_portfolio_cost_eur + new_cost_eur
         new_total_shares = self.state.total_shares + new_shares
 
         if new_total_shares > 0:
             new_avg_cost = (new_total_cost / new_total_shares).quantize(
-                Decimal("0.0001"), ROUND_HALF_UP
+                MONEY_PRECISION, ROUND_HALF_UP
             )
         else:
             new_avg_cost = Decimal("0")
 
-        # Update state
         self.state.total_shares = new_total_shares
         self.state.avg_cost_eur = new_avg_cost
         self.state.total_portfolio_cost_eur = new_total_cost.quantize(
-            Decimal("0.0001"), ROUND_HALF_UP
+            MONEY_PRECISION, ROUND_HALF_UP
         )
 
         return ProcessedEvent(
@@ -102,6 +108,7 @@ class TaxEngine:
             realized_gain_loss=Decimal("0"),
             cost_change_eur=new_cost_eur,
             total_portfolio_cost_eur=self.state.total_portfolio_cost_eur,
+            avg_cost_eur_before=avg_before,
         )
 
     def _process_sell(self, event: StockEvent) -> ProcessedEvent:
@@ -112,6 +119,7 @@ class TaxEngine:
         Calculates realized gain/loss = (sell_price - avg_cost) * shares
         """
         shares_sold = event.shares
+        avg_before = self.state.avg_cost_eur
 
         # Rule C: Depot check - cannot sell more than we have
         if shares_sold > self.state.total_shares:
@@ -123,22 +131,18 @@ class TaxEngine:
 
         # Calculate realized gain/loss
         sell_price_eur = event.price_eur
-        gain_loss = ((sell_price_eur - self.state.avg_cost_eur) * shares_sold).quantize(
-            Decimal("0.0001"), ROUND_HALF_UP
+        gain_loss = ((sell_price_eur - avg_before) * shares_sold).quantize(
+            MONEY_PRECISION, ROUND_HALF_UP
         )
 
         # Cost basis removed from portfolio
-        cost_removed = (self.state.avg_cost_eur * shares_sold).quantize(
-            Decimal("0.0001"), ROUND_HALF_UP
-        )
+        cost_removed = (avg_before * shares_sold).quantize(MONEY_PRECISION, ROUND_HALF_UP)
 
         # Update state (avg_cost stays the same per Rule B)
         self.state.total_shares -= shares_sold
         self.state.total_portfolio_cost_eur -= cost_removed
 
-        # Handle floating point edge case when selling all shares
-        # Also handle near-zero from rounding errors (e.g., 0.0000000001)
-        if self.state.total_shares <= Decimal("0.0001"):
+        if self.state.total_shares <= _ZERO_POSITION_THRESHOLD:
             self.state.total_shares = Decimal("0")
             self.state.avg_cost_eur = Decimal("0")
             self.state.total_portfolio_cost_eur = Decimal("0")
@@ -150,6 +154,7 @@ class TaxEngine:
             realized_gain_loss=gain_loss,
             cost_change_eur=-cost_removed,
             total_portfolio_cost_eur=self.state.total_portfolio_cost_eur,
+            avg_cost_eur_before=avg_before,
         )
 
     def process_event(self, event: StockEvent) -> ProcessedEvent:
@@ -163,13 +168,12 @@ class TaxEngine:
 
         # Track for yearly summary
         year = event.event_date.year
-        if year not in self.yearly_summaries:
-            self.yearly_summaries[year] = YearlyTaxSummary(year=year)
+        summary = self.yearly_summaries.setdefault(year, YearlyTaxSummary(year=year))
 
         if result.realized_gain_loss > 0:
-            self.yearly_summaries[year].total_gains += result.realized_gain_loss
+            summary.total_gains += result.realized_gain_loss
         elif result.realized_gain_loss < 0:
-            self.yearly_summaries[year].total_losses += result.realized_gain_loss
+            summary.total_losses += result.realized_gain_loss
 
         self.processed_events.append(result)
         return result
@@ -199,7 +203,7 @@ class TaxEngine:
 
     def print_ledger(self, year: int | None = None) -> None:
         """Print the full transaction ledger in a readable format.
-        
+
         Args:
             year: Optional year filter. If provided, only show transactions from that year.
         """
@@ -207,12 +211,11 @@ class TaxEngine:
         events_to_print = self.processed_events
         if year is not None:
             events_to_print = [
-                pe for pe in self.processed_events
-                if pe.event.event_date.year == year
+                pe for pe in self.processed_events if pe.event.event_date.year == year
             ]
 
         print("\n" + "=" * 120)
-        if year:
+        if year is not None:
             print(f"TRANSACTION LEDGER - {year}")
         else:
             print("TRANSACTION LEDGER")
@@ -242,7 +245,7 @@ class TaxEngine:
 
     def print_tax_summary(self, year: int | None = None) -> None:
         """Print the yearly tax summary.
-        
+
         Args:
             year: Optional year filter. If provided, only show that year's summary.
         """
@@ -254,7 +257,7 @@ class TaxEngine:
             summaries_to_print = all_summaries
 
         print("\n" + "=" * 80)
-        if year:
+        if year is not None:
             print(f"YEARLY TAX SUMMARY - {year}")
         else:
             print("YEARLY TAX SUMMARY")
@@ -287,7 +290,7 @@ class TaxEngine:
 
     def generate_html_content(self, year: int | None = None) -> str:
         """Generate HTML content for the tax report.
-        
+
         Args:
             year: Optional year filter. If provided, only include that year's data.
         """
@@ -307,7 +310,7 @@ class TaxEngine:
         html.append("code { background-color: #f4f4f4; padding: 2px 4px; border-radius: 4px; }")
         html.append("</style></head><body>")
 
-        if year:
+        if year is not None:
             html.append(f"<h1>Austrian Tax Report - {year}</h1>")
         else:
             html.append("<h1>Austrian Tax Report</h1>")
@@ -381,8 +384,7 @@ class TaxEngine:
         events_to_include = self.processed_events
         if year is not None:
             events_to_include = [
-                pe for pe in self.processed_events
-                if pe.event.event_date.year == year
+                pe for pe in self.processed_events if pe.event.event_date.year == year
             ]
 
         html.append("<h2>Detailed Transaction Ledger</h2>")
@@ -426,20 +428,20 @@ class TaxEngine:
         # Filter sell events by year if specified
         if year is not None:
             sell_events = [
-                pe for pe in self.processed_events
+                pe
+                for pe in self.processed_events
                 if pe.event.event_type == EventType.SELL and pe.event.event_date.year == year
             ]
         else:
-            sell_events = [pe for pe in self.processed_events if pe.event.event_type == EventType.SELL]
+            sell_events = [
+                pe for pe in self.processed_events if pe.event.event_type == EventType.SELL
+            ]
         if not sell_events:
             html.append("<p><em>No sales transactions found.</em></p>")
 
         for i, pe in enumerate(sell_events, 1):
             e = pe.event
-            if e.shares > 0:
-                avg_cost_used = e.price_eur - (pe.realized_gain_loss / e.shares)
-            else:
-                avg_cost_used = Decimal(0)
+            avg_cost_used = pe.avg_cost_eur_before
 
             html.append(f"<h3>{i}. Sale on {e.event_date}</h3>")
             html.append("<ul>")
@@ -458,33 +460,41 @@ class TaxEngine:
         html.append("</body></html>")
         return "".join(html)
 
-    def generate_pdf_report(self, filepath: str, year: int | None = None) -> None:
+    def generate_pdf_report(self, filepath: str, year: int | None = None) -> bool:
         """Generate a PDF tax report using Playwright.
-        
+
         Args:
             filepath: Path where the PDF should be saved.
             year: Optional year filter. If provided, only include that year's data.
+
+        Returns:
+            True if the PDF was written, False otherwise. Failures are reported
+            on stdout so the caller can decide how to exit.
         """
         try:
             from playwright.sync_api import sync_playwright
         except ImportError:
             print("Error: Playwright is not installed. Cannot generate PDF.")
             print("Please install it with: pip install playwright && playwright install")
-            return
+            return False
 
         html_content = self.generate_html_content(year=year)
 
         try:
             with sync_playwright() as p:
-                # Try to launch chromium, if it fails, it might need installation
                 try:
                     browser = p.chromium.launch()
                 except Exception as e:
                     print(f"Error launching browser: {e}")
                     print("Attempting to install browsers...")
                     import subprocess
+                    import sys
 
-                    subprocess.run(["playwright", "install", "chromium"])
+                    # Use the current interpreter so this works inside a venv
+                    # where the `playwright` script may not be on PATH.
+                    subprocess.run(
+                        [sys.executable, "-m", "playwright", "install", "chromium"], check=True
+                    )
                     browser = p.chromium.launch()
 
                 page = browser.new_page()
@@ -497,3 +507,6 @@ class TaxEngine:
                 browser.close()
         except Exception as e:
             print(f"Failed to generate PDF: {e}")
+            return False
+
+        return True

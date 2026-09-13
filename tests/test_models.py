@@ -5,11 +5,16 @@ Tests the computed properties and validation logic in models.py
 without any external dependencies (ECB API, files, etc).
 """
 
+import warnings
 from datetime import date
 from decimal import Decimal
+from unittest.mock import patch
+
+import pytest
 
 from tax_engine.models import (
     EventType,
+    LazyFxRateWarning,
     ProcessedEvent,
     StockEvent,
     TaxEngineState,
@@ -79,6 +84,68 @@ class TestStockEvent:
             fx_rate=Decimal("0.82"),
         )
         assert event.resolved_fx_rate == Decimal("0.82")
+
+    def test_resolved_fx_rate_lazy_fetch_warns(self):
+        """Fetching a rate on demand should work but warn about the missing prefetch."""
+        event = StockEvent(
+            event_date=date(2021, 5, 17),
+            event_type=EventType.VEST,
+            shares=Decimal("100"),
+            price_usd=Decimal("50.00"),
+        )
+        with (
+            patch("tax_engine.ecb_rates.ECBRateFetcher.get_rate", return_value=Decimal("0.80")),
+            pytest.warns(LazyFxRateWarning),
+        ):
+            assert event.resolved_fx_rate == Decimal("0.80")
+
+        # Second access is served from the pinned value without warning.
+        with warnings.catch_warnings():
+            warnings.simplefilter("error")
+            assert event.price_eur == Decimal("40.0000")
+
+    def test_set_resolved_fx_rate_pins_rate(self):
+        """A pinned rate is used without touching the fetcher."""
+        event = StockEvent(
+            event_date=date(2021, 5, 17),
+            event_type=EventType.VEST,
+            shares=Decimal("100"),
+            price_usd=Decimal("50.00"),
+        )
+        event.set_resolved_fx_rate(Decimal("0.75"))
+        with patch("tax_engine.ecb_rates.ECBRateFetcher.get_rate") as mock_get:
+            assert event.resolved_fx_rate == Decimal("0.75")
+            mock_get.assert_not_called()
+
+    @pytest.mark.parametrize("bad", ["nan", "NaN", "inf", "-inf"])
+    def test_non_finite_price_rejected_with_readable_error(self, bad):
+        """NaN/inf parse as valid Decimals but must be rejected explicitly."""
+        with pytest.raises(ValueError, match="finite"):
+            StockEvent(
+                event_date=date(2021, 1, 1),
+                event_type=EventType.SELL,
+                shares=Decimal("10"),
+                price_usd=Decimal(bad),
+            )
+
+    def test_non_finite_shares_rejected(self):
+        with pytest.raises(ValueError, match="finite"):
+            StockEvent(
+                event_date=date(2021, 1, 1),
+                event_type=EventType.SELL,
+                shares=Decimal("nan"),
+                price_usd=Decimal("10"),
+            )
+
+    def test_non_finite_fx_rate_rejected(self):
+        with pytest.raises(ValueError, match="finite"):
+            StockEvent(
+                event_date=date(2021, 1, 1),
+                event_type=EventType.SELL,
+                shares=Decimal("1"),
+                price_usd=Decimal("10"),
+                fx_rate=Decimal("nan"),
+            )
 
     def test_event_types(self):
         """Test all event types can be created."""
