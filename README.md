@@ -104,6 +104,60 @@ uv run main.py
 
 It will generate a pdf file tax_report_*.pdf
 
+## Filing a Single Tax Year
+
+To file one year, pass `--year`:
+
+```bash
+uv run main.py --year 2025
+```
+
+This limits the calculation and the report to that year and builds a **submission
+bundle** in `output/Steuerakt_2025/`:
+
+```
+output/Steuerakt_2025/
+├── Steuerakt_2025_komplett.pdf   ← the single file to submit
+├── 00_Steuerbericht_2025.pdf     ← the tax report on its own
+├── Belegverzeichnis_2025.csv     ← document index as CSV
+├── README.txt                    ← what is in the bundle and why
+├── belege/                       ← every source document, named by Beleg-Nr.
+│   ├── B-001_RSU_Confirmation_<date>_<id>.pdf
+│   ├── …
+│   ├── B-034_BenefitHistory_extract.pdf
+│   └── B-035_orders_extract.pdf
+└── source_data/                  ← the untouched original workbooks
+```
+
+`Steuerakt_2025_komplett.pdf` contains a cover page, the tax report, and then every
+document behind a cover sheet carrying its Beleg-Nr. Each row of the transaction
+ledger in the report cites that number, so the Finanzamt can follow any figure back
+to its document. A ZIP of the folder is written next to it.
+
+Useful flags:
+
+| Flag | Effect |
+|------|--------|
+| `--year 2025` | Limit the calculation and report to tax year 2025 |
+| `--no-bundle` | Just print the report and write a single PDF |
+| `--output-dir DIR` | Write the bundle somewhere other than `./output` |
+| `--no-zip` | Skip the ZIP archive |
+
+### Why documents from earlier years are in the bundle
+
+Austria requires the moving average cost basis, so the gain on a 2025 sale is the
+sale price minus the average cost of the *whole* holding — which earlier vests and
+purchases built up. The bundle therefore separates:
+
+- **Primary** documents: the transactions of the filed year.
+- **Supporting** documents: the earlier acquisitions that establish the average cost
+  carried into 1 January of that year. They are not taxed in the report; they are
+  there to substantiate the opening figure. They reach back only to the last date
+  the depot was empty, because the average cost resets at that point.
+
+Appendix A of the report reproduces those earlier transactions so the opening
+average cost can be recomputed line by line.
+
 ## Filing in FinanzOnline
 
 The tax report output includes the values you need for your Austrian tax return (Formulars E1 / E1kv):

@@ -8,8 +8,9 @@ Calculates capital gains tax using the Austrian moving average cost basis method
 Main entry point for the application.
 
 Usage:
-    uv run main.py              # Process all years
-    uv run main.py --year 2025  # Filter to a specific year
+    uv run main.py                          # Process all years, single PDF
+    uv run main.py --year 2025              # One tax year + submission bundle
+    uv run main.py --year 2025 --no-bundle  # One tax year, single PDF only
 """
 
 import sys

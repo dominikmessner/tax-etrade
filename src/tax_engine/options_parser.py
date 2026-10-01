@@ -27,7 +27,8 @@ class OptionsExercise:
     sale_price_usd: Decimal | None  # Only present for Same-Day Sale
     shares_sold: Decimal | None  # Only present for Same-Day Sale
     order_number: str
-    source_file: str
+    source_file: str  # file name only, e.g. "cash_exercise.pdf"
+    source_path: str = ""  # path relative to the project root, for the evidence bundle
 
 
 def _parse_usd(value: str) -> Decimal | None:
@@ -125,6 +126,7 @@ def parse_options_pdf(pdf_path: Path) -> OptionsExercise | None:
             shares_sold=shares_sold,
             order_number=order_number,
             source_file=pdf_path.name,
+            source_path=pdf_path.as_posix(),
         )
 
 

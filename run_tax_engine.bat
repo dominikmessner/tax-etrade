@@ -68,11 +68,12 @@ echo    Austrian Tax Engine for E-Trade
 echo ==========================================
 echo 1. Login to E-Trade (Required first)
 echo 2. Download All Data (ESPP, Orders, RSU)
-echo 3. Calculate Tax
-echo 4. Run Demo
-echo 5. Exit
+echo 3. Calculate Tax (all years)
+echo 4. Calculate One Tax Year + Document Bundle
+echo 5. Run Demo
+echo 6. Exit
 echo ==========================================
-set /p choice="Select an option (1-5): "
+set /p choice="Select an option (1-6): "
 
 if "%choice%"=="1" (
     echo Running Login...
@@ -93,15 +94,30 @@ if "%choice%"=="3" (
     goto menu
 )
 if "%choice%"=="4" (
+    set /p tax_year="Which tax year? (e.g. 2025): "
+    call :run_year
+    pause
+    goto menu
+)
+if "%choice%"=="5" (
     echo Running Demo...
     .venv\Scripts\tax-demo
     pause
     goto menu
 )
-if "%choice%"=="5" (
+if "%choice%"=="6" (
     exit /b 0
 )
 
 echo Invalid option.
 pause
 goto menu
+
+REM Runs one tax year in a subroutine so %tax_year% is expanded after it is read
+REM (inside the if-block above it would still hold its old value).
+:run_year
+echo Calculating tax year %tax_year% and building the document bundle...
+.venv\Scripts\tax-engine --year %tax_year%
+echo.
+echo The bundle is in: output\Steuerakt_%tax_year%\
+exit /b 0
