@@ -10,6 +10,7 @@ from decimal import Decimal
 
 import pytest
 
+from tax_engine.evidence import build_evidence_index
 from tax_engine.models import EventType, StockEvent
 from tax_engine.tax_engine import TaxEngine
 
@@ -986,3 +987,138 @@ class TestYearFiltering:
         assert 2021 in engine.yearly_summaries
         assert 2022 in engine.yearly_summaries
 
+
+
+class TestOpeningAndClosingPosition:
+    """Tests for the positions a single-year report opens and closes with."""
+
+    def _engine(self):
+        """2023: vest 100 @ $50. 2024: vest 100 @ $70. 2025: sell 50 @ $90."""
+        engine = TaxEngine()
+        engine.process_all(
+            [
+                StockEvent(
+                    event_date=date(2023, 6, 5),
+                    event_type=EventType.VEST,
+                    shares=Decimal("100"),
+                    price_usd=Decimal("50.00"),
+                    fx_rate=Decimal("0.90"),
+                ),
+                StockEvent(
+                    event_date=date(2024, 6, 5),
+                    event_type=EventType.VEST,
+                    shares=Decimal("100"),
+                    price_usd=Decimal("70.00"),
+                    fx_rate=Decimal("0.90"),
+                ),
+                StockEvent(
+                    event_date=date(2025, 7, 1),
+                    event_type=EventType.SELL,
+                    shares=Decimal("50"),
+                    price_usd=Decimal("90.00"),
+                    fx_rate=Decimal("0.90"),
+                ),
+            ]
+        )
+        return engine
+
+    def test_opening_position_is_state_before_the_year(self):
+        opening = self._engine().get_opening_position(2025)
+
+        # (100 * €45 + 100 * €63) / 200 = €54.00
+        assert opening.total_shares == Decimal("200")
+        assert opening.avg_cost_eur == Decimal("54.0000")
+        assert opening.total_portfolio_cost_eur == Decimal("10800.0000")
+
+    def test_opening_position_of_first_year_is_empty(self):
+        opening = self._engine().get_opening_position(2023)
+
+        assert opening.total_shares == Decimal("0")
+        assert opening.avg_cost_eur == Decimal("0")
+
+    def test_closing_position_includes_the_year(self):
+        closing = self._engine().get_closing_position(2025)
+
+        assert closing.total_shares == Decimal("150")
+        assert closing.avg_cost_eur == Decimal("54.0000")
+
+    def test_closing_of_one_year_is_opening_of_the_next(self):
+        engine = self._engine()
+
+        closing = engine.get_closing_position(2024)
+        opening = engine.get_opening_position(2025)
+
+        assert closing.total_shares == opening.total_shares
+        assert closing.avg_cost_eur == opening.avg_cost_eur
+
+    def test_year_without_transactions_carries_the_position(self):
+        """A quiet year opens and closes on the position it inherited."""
+        engine = self._engine()  # last transaction is in 2025
+
+        opening = engine.get_opening_position(2026)
+        closing = engine.get_closing_position(2026)
+
+        assert opening.total_shares == closing.total_shares == Decimal("150")
+        assert opening.avg_cost_eur == closing.avg_cost_eur == Decimal("54.0000")
+
+
+class TestSingleYearReport:
+    """The HTML report for one year must explain the cost basis it inherited."""
+
+    def _engine(self):
+        engine = TaxEngine()
+        engine.process_all(
+            [
+                StockEvent(
+                    event_date=date(2024, 6, 5),
+                    event_type=EventType.VEST,
+                    shares=Decimal("100"),
+                    price_usd=Decimal("50.00"),
+                    fx_rate=Decimal("0.90"),
+                    source_document="input/rsu/vest_2024.pdf",
+                ),
+                StockEvent(
+                    event_date=date(2025, 7, 1),
+                    event_type=EventType.SELL,
+                    shares=Decimal("40"),
+                    price_usd=Decimal("80.00"),
+                    fx_rate=Decimal("0.90"),
+                    source_document="input/orders/orders.xlsx",
+                    source_reference="row 7",
+                    source_row=7,
+                ),
+            ]
+        )
+        return engine
+
+    def test_report_states_the_opening_position(self):
+        html = self._engine().generate_html_content(year=2025)
+
+        assert "Opening Position on 01.01.2025" in html
+        assert "€45.0000" in html  # $50 * 0.90
+
+    def test_report_scope_is_stated(self):
+        html = self._engine().generate_html_content(year=2025)
+
+        assert "tax year 2025 only" in html
+
+    def test_report_cites_documents_when_an_index_is_given(self):
+        engine = self._engine()
+        evidence = build_evidence_index(engine.processed_events, 2025)
+
+        html = engine.generate_html_content(year=2025, evidence=evidence)
+
+        assert "Belegverzeichnis" in html
+        assert "Opening Position Derivation" in html
+        assert evidence.citation_for(engine.processed_events[1]) in html
+
+    def test_report_without_index_has_no_appendices(self):
+        html = self._engine().generate_html_content(year=2025)
+
+        assert "Belegverzeichnis" not in html
+
+    def test_unfiltered_report_is_unchanged_by_the_year_sections(self):
+        html = self._engine().generate_html_content()
+
+        assert "Opening Position on" not in html
+        assert "Austrian Tax Report</h1>" in html

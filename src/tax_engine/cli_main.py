@@ -21,6 +21,8 @@ from tax_engine import (
     load_rsu_events,
     prefetch_ecb_rates,
 )
+from tax_engine.bundle import BundleResult, build_bundle
+from tax_engine.evidence import EvidenceIndex, build_evidence_index
 from tax_engine.options_parser import load_options_events
 
 
@@ -32,11 +34,15 @@ def load_events_from_excel() -> list[StockEvent]:
 
     # Read the ESPP sheet
     # The user mentioned the sheet is named "ESPP"
+    # sheet_name is recorded on each event so the bundle can quote the right sheet;
+    # None means "the first sheet", the same fallback used here.
+    sheet_name: str | None = "ESPP"
     try:
         df = pd.read_excel(excel_path, sheet_name="ESPP")
     except ValueError:
         print("Warning: Sheet 'ESPP' not found, attempting to read the first sheet.")
         df = pd.read_excel(excel_path, sheet_name=0)
+        sheet_name = None
 
     events = []
 
@@ -88,6 +94,12 @@ def load_events_from_excel() -> list[StockEvent]:
             shares=shares,
             price_usd=price_usd,
             notes="ESPP Purchase",
+            source_document=excel_path.as_posix(),
+            source_reference=(
+                f"sheet '{sheet_name}', row {row_num}" if sheet_name else f"row {row_num}"
+            ),
+            source_sheet=sheet_name,
+            source_row=row_num,
         )
         events.append(event)
 
@@ -110,6 +122,9 @@ def load_orders_from_excel() -> list[StockEvent]:
     events = []
 
     for i, (_, row) in enumerate(df.iterrows()):
+        # Excel row number (1-based + header)
+        row_num = i + 2
+
         # Parse date
         # Prefer Execution Date (actual trade date) over Order Date (when order was placed).
         # Older downloads may only have Order Date — fall back gracefully.
@@ -137,8 +152,7 @@ def load_orders_from_excel() -> list[StockEvent]:
             continue
 
         # Parse quantity
-        # row index + 1 for 0-based index, +1 for header row
-        printable_index = i + 2
+        printable_index = row_num
         sold_qty_str = str(row["Sold Qty."]).replace(",", "").strip()
         if sold_qty_str == "--":
             print(f"Skipping row #{printable_index}: canceled order")
@@ -163,6 +177,11 @@ def load_orders_from_excel() -> list[StockEvent]:
             shares=shares,
             price_usd=price_usd,
             notes="Sell Order",
+            source_document=excel_path.as_posix(),
+            source_reference=f"row {row_num}",
+            # The workbook has a single sheet; leaving it unset means "the first
+            # sheet", which is what the loader itself reads.
+            source_row=row_num,
         )
         events.append(event)
 
@@ -188,6 +207,8 @@ def load_options_stock_events() -> list[StockEvent]:
             shares=ex.shares_exercised,
             price_usd=ex.fmv_usd,
             notes=f"Options Exercise (strike ${ex.grant_price_usd}, {ex.exercise_type})",
+            source_document=ex.source_path or f"input/options/{ex.source_file}",
+            source_reference="Exercise Confirmation",
         )
         events.append(exercise_event)
 
@@ -199,6 +220,8 @@ def load_options_stock_events() -> list[StockEvent]:
                 shares=ex.shares_sold,
                 price_usd=ex.sale_price_usd,
                 notes=f"Options Same-Day Sale (order {ex.order_number})",
+                source_document=ex.source_path or f"input/options/{ex.source_file}",
+                source_reference=f"Same-Day Sale, order {ex.order_number}",
             )
             events.append(sell_event)
 
@@ -208,21 +231,49 @@ def load_options_stock_events() -> list[StockEvent]:
 def main() -> None:
     """Run the tax engine with actual data from Excel files."""
     # Parse command-line arguments
-    parser = argparse.ArgumentParser(
-        description="Austrian Tax Engine for E-Trade RSUs and ESPP"
-    )
+    parser = argparse.ArgumentParser(description="Austrian Tax Engine for E-Trade RSUs and ESPP")
     parser.add_argument(
         "--year",
         type=int,
         default=None,
-        help="Filter output to a specific tax year (e.g., --year 2025)",
+        help="Limit the report to a single tax year (e.g., --year 2025)",
+    )
+    parser.add_argument(
+        "--bundle",
+        dest="bundle",
+        action="store_true",
+        default=None,
+        help="Build the submission bundle (report + every source document, "
+        "numbered and merged into one PDF). On by default when --year is given.",
+    )
+    parser.add_argument(
+        "--no-bundle",
+        dest="bundle",
+        action="store_false",
+        help="Only print the report and write a single PDF, without the document bundle.",
+    )
+    parser.add_argument(
+        "--output-dir",
+        type=Path,
+        default=Path("output"),
+        help="Where to write the submission bundle (default: ./output)",
+    )
+    parser.add_argument(
+        "--no-zip",
+        action="store_true",
+        help="Do not create a ZIP archive of the bundle folder.",
     )
     args = parser.parse_args()
+
+    # A bundle documents one tax year, so it needs --year.
+    build_the_bundle = args.bundle if args.bundle is not None else args.year is not None
+    if build_the_bundle and args.year is None:
+        parser.error("--bundle requires --year (a bundle documents a single tax year)")
 
     print("Austrian Tax Engine for E-Trade RSUs and ESPP")
     print("Using Moving Average Cost Basis (Gleitender Durchschnittspreis)")
     if args.year:
-        print(f"Filtering to year: {args.year}")
+        print(f"Tax year: {args.year}")
     print()
 
     # Load events from Excel file
@@ -239,6 +290,20 @@ def main() -> None:
 
     # Combine and sort all events
     events = espp_events + sell_events + rsu_events + options_events
+
+    # When filing a single year, drop everything after it. Processing is
+    # chronological, so later transactions cannot change that year's result - but a
+    # problem in newer data (a sale that looks larger than the holding, say) would
+    # otherwise abort a run for a year that is already closed.
+    if args.year is not None:
+        cutoff = date(args.year, 12, 31)
+        dropped = [e for e in events if e.event_date > cutoff]
+        events = [e for e in events if e.event_date <= cutoff]
+        if dropped:
+            print(
+                f"Ignoring {len(dropped)} transaction(s) after {cutoff.isoformat()} "
+                f"(not relevant to tax year {args.year})."
+            )
 
     # Sort by date, then by event type (BUY/VEST before SELL) to handle same-day transactions
     # We want VEST/BUY to happen before SELL so we have inventory to sell
@@ -267,15 +332,35 @@ def main() -> None:
                 print("No tax data available (no sales transactions processed)")
             return
 
+    # Index the documents behind this year's transactions so the report can cite them
+    evidence = build_evidence_index(engine.processed_events, args.year) if args.year else None
+
     # Print results
-    engine.print_ledger(year=args.year)
+    engine.print_ledger(year=args.year, evidence=evidence)
     engine.print_tax_summary(year=args.year)
 
-    # Show current state (only if not filtering by year)
-    if not args.year:
+    if args.year:
+        closing = engine.get_closing_position(args.year)
+        print(f"Position on 31.12.{args.year}: {closing.total_shares} shares")
+        print(f"Average cost carried into {args.year + 1}: €{closing.avg_cost_eur:,.4f}")
+        print(f"Total cost basis: €{closing.total_portfolio_cost_eur:,.4f}")
+    else:
         print(f"\nCurrent Position: {engine.state.total_shares} shares")
         print(f"Current Avg Cost: €{engine.state.avg_cost_eur:,.4f}")
         print(f"Total Portfolio Cost: €{engine.state.total_portfolio_cost_eur:,.4f}")
+
+    if build_the_bundle and evidence is not None:
+        print_evidence_summary(evidence)
+        print(f"\nBuilding submission bundle for {args.year}...")
+        result = build_bundle(
+            engine,
+            args.year,
+            evidence,
+            output_dir=args.output_dir,
+            make_zip=not args.no_zip,
+        )
+        print_bundle_result(result)
+        return
 
     # Generate PDF report
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -284,8 +369,54 @@ def main() -> None:
     else:
         pdf_path = f"tax_report_{timestamp}.pdf"
     print(f"\nGenerating PDF report at: {pdf_path}...")
-    engine.generate_pdf_report(pdf_path, year=args.year)
+    engine.generate_pdf_report(pdf_path, year=args.year, evidence=evidence)
     print("PDF generation complete.")
+
+
+def print_evidence_summary(evidence: EvidenceIndex) -> None:
+    """List the documents the filed year relies on."""
+    print("\n" + "=" * 100)
+    print(f"DOCUMENT INDEX (BELEGVERZEICHNIS) - {evidence.year}")
+    print("=" * 100)
+    print(f"{'Beleg':<8} {'Document':<48} {'Date(s)':<25} {'Tx':>4} {'Role':<12}")
+    print("-" * 100)
+    for doc in evidence.documents:
+        print(
+            f"{doc.number:<8} {doc.name[:47]:<48} {doc.date_range:<25} "
+            f"{doc.event_count:>4} {doc.role:<12}"
+        )
+    print("-" * 100)
+    both = len(evidence.both_roles)
+    overlap = f" ({both} of them cover both)" if both else ""
+    print(
+        f"{len(evidence.documents)} document(s) in total: "
+        f"{len(evidence.primary)} cover {evidence.year} transactions, "
+        f"{len(evidence.supporting)} cover the opening cost basis{overlap}."
+    )
+    for missing in evidence.missing:
+        print(f"  WARNING: referenced document not found on disk: {missing}")
+    if evidence.undocumented_events:
+        print(f"  WARNING: {evidence.undocumented_events} transaction(s) have no source document.")
+    print("=" * 100)
+
+
+def print_bundle_result(result: BundleResult) -> None:
+    """Report where the bundle landed."""
+    print("\n" + "=" * 100)
+    print(f"SUBMISSION BUNDLE - {result.year}")
+    print("=" * 100)
+    print(f"Folder:        {result.directory}")
+    print(f"Tax report:    {result.report_pdf}")
+    if result.merged_pdf:
+        print(f"Submit this:   {result.merged_pdf}")
+    if result.index_csv:
+        print(f"Index (CSV):   {result.index_csv}")
+    if result.zip_file:
+        print(f"ZIP archive:   {result.zip_file}")
+    print(f"Documents:     {len(result.documents)} filed under belege/")
+    for warning in result.warnings:
+        print(f"  WARNING: {warning}")
+    print("=" * 100)
 
 
 if __name__ == "__main__":

@@ -58,11 +58,12 @@ while true; do
     echo "=========================================="
     echo "1. Login to E-Trade (Required first)"
     echo "2. Download All Data (ESPP, Orders, RSU)"
-    echo "3. Calculate Tax"
-    echo "4. Run Demo"
-    echo "5. Exit"
+    echo "3. Calculate Tax (all years)"
+    echo "4. Calculate One Tax Year + Document Bundle"
+    echo "5. Run Demo"
+    echo "6. Exit"
     echo "=========================================="
-    read -p "Select an option (1-5): " choice
+    read -p "Select an option (1-6): " choice
 
     case $choice in
         1)
@@ -92,13 +93,28 @@ while true; do
             ;;
         4)
             echo "------------------------------------------"
+            echo "Single tax year + document bundle"
+            echo "------------------------------------------"
+            read -p "Which tax year? (e.g. 2025): " tax_year
+            if [[ "$tax_year" =~ ^[0-9]{4}$ ]]; then
+                .venv/bin/tax-engine --year "$tax_year"
+                echo ""
+                echo "The bundle is in: output/Steuerakt_$tax_year/"
+            else
+                echo "'$tax_year' is not a four-digit year."
+            fi
+            echo ""
+            read -p "Press Enter to return to menu..."
+            ;;
+        5)
+            echo "------------------------------------------"
             echo "Running Demo..."
             echo "------------------------------------------"
             .venv/bin/tax-demo
             echo ""
             read -p "Press Enter to return to menu..."
             ;;
-        5)
+        6)
             echo "Exiting..."
             exit 0
             ;;
