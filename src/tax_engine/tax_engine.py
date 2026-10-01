@@ -9,6 +9,7 @@ from collections import defaultdict
 from datetime import date
 from decimal import ROUND_HALF_UP, Decimal
 
+from .evidence import EvidenceIndex, relevant_events
 from .models import (
     EventType,
     ProcessedEvent,
@@ -197,32 +198,79 @@ class TaxEngine:
         """Get all yearly tax summaries, sorted by year."""
         return sorted(self.yearly_summaries.values(), key=lambda s: s.year)
 
-    def print_ledger(self, year: int | None = None) -> None:
+    def get_opening_position(self, year: int) -> TaxEngineState:
+        """
+        Portfolio state carried into ``year`` (i.e. as of 1 January).
+
+        This is what a single-year report needs in order to explain where the
+        average cost basis used by that year's sales comes from.
+        """
+        state = TaxEngineState()
+        for pe in self.processed_events:
+            if pe.event.event_date.year >= year:
+                break
+            state = TaxEngineState(
+                total_shares=pe.total_shares_after,
+                avg_cost_eur=pe.avg_cost_eur_after,
+                total_portfolio_cost_eur=pe.total_portfolio_cost_eur,
+            )
+        return state
+
+    def get_closing_position(self, year: int) -> TaxEngineState:
+        """Portfolio state at the end of ``year`` (i.e. as of 31 December)."""
+        state = TaxEngineState()
+        for pe in self.processed_events:
+            if pe.event.event_date.year > year:
+                break
+            state = TaxEngineState(
+                total_shares=pe.total_shares_after,
+                avg_cost_eur=pe.avg_cost_eur_after,
+                total_portfolio_cost_eur=pe.total_portfolio_cost_eur,
+            )
+        return state
+
+    def print_ledger(self, year: int | None = None, evidence: EvidenceIndex | None = None) -> None:
         """Print the full transaction ledger in a readable format.
-        
+
         Args:
-            year: Optional year filter. If provided, only show transactions from that year.
+            year: Optional year filter. If provided, only show transactions from that year,
+                preceded by the opening position carried into that year.
+            evidence: Optional document index. If provided, each row cites the
+                Beleg-Nr. of the document it is based on.
         """
         # Filter events by year if specified
         events_to_print = self.processed_events
         if year is not None:
             events_to_print = [
-                pe for pe in self.processed_events
-                if pe.event.event_date.year == year
+                pe for pe in self.processed_events if pe.event.event_date.year == year
             ]
 
-        print("\n" + "=" * 120)
+        width = 138 if evidence else 120
+        print("\n" + "=" * width)
         if year:
             print(f"TRANSACTION LEDGER - {year}")
         else:
             print("TRANSACTION LEDGER")
-        print("=" * 120)
-        print(
+        print("=" * width)
+        header = (
             f"{'Date':<12} {'Type':<6} {'Shares':>10} {'Price USD':>12} "
             f"{'FX Rate':>10} {'Price EUR':>12} {'Total Qty':>10} "
             f"{'Avg Cost':>12} {'Gain/Loss':>12}"
         )
-        print("-" * 120)
+        if evidence:
+            header += f" {'Beleg':<17}"
+        print(header)
+        print("-" * width)
+
+        # Opening position makes a single-year ledger self-explanatory: the first
+        # sale of the year uses an average cost that was built up in earlier years.
+        if year is not None:
+            opening = self.get_opening_position(year)
+            print(
+                f"{'01.01.' + str(year):<12} {'OPEN':<6} "
+                f"{'':>10} {'':>12} {'':>10} {'':>12} "
+                f"{opening.total_shares:>10,.0f} €{opening.avg_cost_eur:>11,.4f} {'':>12}"
+            )
 
         for pe in events_to_print:
             e = pe.event
@@ -230,19 +278,30 @@ class TaxEngine:
             shares_str = f"{shares_sign}{e.shares:,.0f}"
             gain_str = f"€{pe.realized_gain_loss:,.4f}" if pe.realized_gain_loss != 0 else ""
 
-            print(
+            row = (
                 f"{e.event_date.isoformat():<12} {e.event_type.value:<6} "
                 f"{shares_str:>10} ${e.price_usd:>11,.2f} "
                 f"{e.resolved_fx_rate:>10.4f} €{e.price_eur:>11,.4f} "
                 f"{pe.total_shares_after:>10,.0f} €{pe.avg_cost_eur_after:>11,.4f} "
                 f"{gain_str:>12}"
             )
+            if evidence:
+                row += f" {evidence.citation_for(pe):<17}"
+            print(row)
 
-        print("=" * 120)
+        if year is not None:
+            closing = self.get_closing_position(year)
+            print(
+                f"{'31.12.' + str(year):<12} {'CLOSE':<6} "
+                f"{'':>10} {'':>12} {'':>10} {'':>12} "
+                f"{closing.total_shares:>10,.0f} €{closing.avg_cost_eur:>11,.4f} {'':>12}"
+            )
+
+        print("=" * width)
 
     def print_tax_summary(self, year: int | None = None) -> None:
         """Print the yearly tax summary.
-        
+
         Args:
             year: Optional year filter. If provided, only show that year's summary.
         """
@@ -285,14 +344,22 @@ class TaxEngine:
             print(f"    Kennzahl 892 (Losses): €{summary.total_losses:>12,.2f}")
             print()
 
-    def generate_html_content(self, year: int | None = None) -> str:
+    def generate_html_content(
+        self, year: int | None = None, evidence: EvidenceIndex | None = None
+    ) -> str:
         """Generate HTML content for the tax report.
-        
+
         Args:
-            year: Optional year filter. If provided, only include that year's data.
+            year: Optional year filter. If provided, the report covers that single
+                tax year: it opens with the position carried into the year, lists
+                only that year's transactions, and closes with the position at
+                31 December.
+            evidence: Optional document index. If provided, every transaction cites
+                the Beleg-Nr. of its source document and the report ends with a
+                document index (Belegverzeichnis).
         """
         html = []
-        html.append("<html><head><style>")
+        html.append("<html><head><meta charset='utf-8'><style>")
         html.append(
             "body { font-family: sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; }"
         )
@@ -305,13 +372,44 @@ class TaxEngine:
         html.append(".gain { color: green; }")
         html.append(".loss { color: red; }")
         html.append("code { background-color: #f4f4f4; padding: 2px 4px; border-radius: 4px; }")
+        # Print/PDF behaviour: repeat table headers, avoid splitting rows.
+        html.append("thead { display: table-header-group; }")
+        html.append("tr { page-break-inside: avoid; }")
+        html.append(".page-break { page-break-before: always; }")
+        html.append(
+            ".note { background-color: #f9f9f9; border-left: 4px solid #999; "
+            "padding: 8px 12px; font-size: 12px; margin-bottom: 16px; }"
+        )
+        html.append(".beleg { font-family: monospace; font-size: 11px; white-space: nowrap; }")
+        html.append(".muted { color: #666; font-size: 11px; }")
         html.append("</style></head><body>")
 
         if year:
-            html.append(f"<h1>Austrian Tax Report - {year}</h1>")
+            html.append(f"<h1>Austrian Tax Report {year}</h1>")
+            html.append(
+                f"<p><strong>Steuerbericht Kapitalvermögen {year}</strong> — "
+                f"realized gains and losses from RSU, ESPP and stock option shares.</p>"
+            )
         else:
             html.append("<h1>Austrian Tax Report</h1>")
         html.append(f"<p>Generated on: {date.today().isoformat()}</p>")
+
+        if year:
+            html.append("<h2>Scope of this report</h2>")
+            html.append("<div class='note'>")
+            html.append(
+                f"<p>This report covers <strong>tax year {year} only</strong> "
+                f"(01.01.{year} – 31.12.{year}).</p>"
+            )
+            html.append(
+                "<p>Under the moving average cost basis method the gain on a sale depends on "
+                "every earlier acquisition. The full transaction history up to 31.12."
+                f"{year} was therefore used to compute the average cost, but only {year} "
+                "transactions are reported and taxed here. The position carried into the "
+                "year is shown below, and the earlier transactions that produced it are "
+                "documented in the appendix.</p>"
+            )
+            html.append("</div>")
 
         html.append("<h2>Methodology</h2>")
         html.append(
@@ -320,7 +418,7 @@ class TaxEngine:
         html.append("<h3>Key Rules:</h3>")
         html.append("<ul>")
         html.append(
-            "<li><strong>Acquisitions (VEST/BUY)</strong>: Recalculate the moving average cost.<br><code>New Avg = (Old Total Cost + New Cost) / (Old Shares + New Shares)</code></li>"
+            "<li><strong>Acquisitions (VEST/BUY/EXERCISE)</strong>: Recalculate the moving average cost.<br><code>New Avg = (Old Total Cost + New Cost) / (Old Shares + New Shares)</code></li>"
         )
         html.append(
             "<li><strong>Sales (SELL)</strong>: Do not change the average cost per share.<br><code>Realized Gain/Loss = (Sell Price - Avg Cost) * Shares Sold</code></li>"
@@ -329,6 +427,31 @@ class TaxEngine:
             "<li><strong>Currency</strong>: All values are converted to EUR using the daily ECB reference rate.</li>"
         )
         html.append("</ul>")
+
+        # --- Opening position --------------------------------------------------
+        opening = self.get_opening_position(year) if year is not None else None
+        if year is not None and opening is not None:
+            html.append(f"<h2>Opening Position on 01.01.{year}</h2>")
+            html.append("<table>")
+            html.append("<tr><th>Item</th><th>Value</th></tr>")
+            html.append(
+                f"<tr><td>Shares held (Stückzahl)</td><td>{opening.total_shares:,.0f}</td></tr>"
+            )
+            html.append(
+                f"<tr><td>Moving average cost per share "
+                f"(Gleitender Durchschnittspreis)</td>"
+                f"<td>€{opening.avg_cost_eur:,.4f}</td></tr>"
+            )
+            html.append(
+                f"<tr><td>Total cost basis (Anschaffungskosten gesamt)</td>"
+                f"<td>€{opening.total_portfolio_cost_eur:,.2f}</td></tr>"
+            )
+            html.append("</table>")
+            if opening.total_shares > 0:
+                html.append(
+                    "<p class='muted'>Derivation of this opening average cost: see appendix "
+                    "&quot;Opening Position Derivation&quot;.</p>"
+                )
 
         # Filter summaries by year if specified
         all_summaries = self.get_all_yearly_summaries()
@@ -340,7 +463,7 @@ class TaxEngine:
         html.append("<h2>Yearly Tax Summary</h2>")
         html.append("<table>")
         html.append(
-            "<tr><th>Year</th><th>Total Gains</th><th>Total Losses</th><th>Net Gain/Loss</th><th>Taxable Amount</th><th>KESt Due (27.5%)</th></tr>"
+            "<thead><tr><th>Year</th><th>Total Gains</th><th>Total Losses</th><th>Net Gain/Loss</th><th>Taxable Amount</th><th>KESt Due (27.5%)</th></tr></thead>"
         )
 
         for summary in summaries_to_include:
@@ -363,7 +486,7 @@ class TaxEngine:
         )
         html.append("<table>")
         html.append(
-            "<tr><th>Year</th><th>Kennzahl 994 (Gains)</th><th>Kennzahl 892 (Losses)</th></tr>"
+            "<thead><tr><th>Year</th><th>Kennzahl 994 (Gains)</th><th>Kennzahl 892 (Losses)</th></tr></thead>"
         )
         for summary in summaries_to_include:
             html.append("<tr>")
@@ -381,19 +504,39 @@ class TaxEngine:
         events_to_include = self.processed_events
         if year is not None:
             events_to_include = [
-                pe for pe in self.processed_events
-                if pe.event.event_date.year == year
+                pe for pe in self.processed_events if pe.event.event_date.year == year
             ]
 
-        html.append("<h2>Detailed Transaction Ledger</h2>")
+        if year:
+            html.append(f"<h2>Detailed Transaction Ledger {year}</h2>")
+        else:
+            html.append("<h2>Detailed Transaction Ledger</h2>")
         html.append(
             "<p>The following table documents every transaction and its effect on the portfolio cost basis.</p>"
         )
 
         html.append("<table>")
-        html.append(
-            "<tr><th>Date</th><th>Type</th><th>Shares</th><th>Price (USD)</th><th>FX Rate</th><th>Price (EUR)</th><th>Total Value (EUR)</th><th>Portfolio Qty</th><th>Avg Cost (EUR)</th><th>Realized G/L (EUR)</th></tr>"
+        header_cells = (
+            "<th>Date</th><th>Type</th><th>Shares</th><th>Price (USD)</th><th>FX Rate</th>"
+            "<th>Price (EUR)</th><th>Total Value (EUR)</th><th>Portfolio Qty</th>"
+            "<th>Avg Cost (EUR)</th><th>Realized G/L (EUR)</th>"
         )
+        if evidence:
+            header_cells += "<th>Beleg</th>"
+        html.append(f"<thead><tr>{header_cells}</tr></thead>")
+
+        if year is not None and opening is not None:
+            span_before = 7
+            html.append("<tr>")
+            html.append(f"<td><strong>01.01.{year}</strong></td>")
+            html.append("<td><strong>OPEN</strong></td>")
+            html.append(f"<td colspan='{span_before - 2}'><em>Carried forward</em></td>")
+            html.append(f"<td>{opening.total_shares:,.0f}</td>")
+            html.append(f"<td>€{opening.avg_cost_eur:,.4f}</td>")
+            html.append("<td></td>")
+            if evidence:
+                html.append("<td class='beleg'>see appendix</td>")
+            html.append("</tr>")
 
         for pe in events_to_include:
             e = pe.event
@@ -417,6 +560,21 @@ class TaxEngine:
             html.append(f"<td>{pe.total_shares_after:,.0f}</td>")
             html.append(f"<td>€{pe.avg_cost_eur_after:,.4f}</td>")
             html.append(f"<td>{gl_str}</td>")
+            if evidence:
+                html.append(f"<td class='beleg'>{evidence.citation_for(pe)}</td>")
+            html.append("</tr>")
+
+        if year is not None:
+            closing = self.get_closing_position(year)
+            html.append("<tr>")
+            html.append(f"<td><strong>31.12.{year}</strong></td>")
+            html.append("<td><strong>CLOSE</strong></td>")
+            html.append("<td colspan='5'><em>Carried forward to the next year</em></td>")
+            html.append(f"<td>{closing.total_shares:,.0f}</td>")
+            html.append(f"<td>€{closing.avg_cost_eur:,.4f}</td>")
+            html.append("<td></td>")
+            if evidence:
+                html.append("<td></td>")
             html.append("</tr>")
         html.append("</table>")
 
@@ -426,11 +584,14 @@ class TaxEngine:
         # Filter sell events by year if specified
         if year is not None:
             sell_events = [
-                pe for pe in self.processed_events
+                pe
+                for pe in self.processed_events
                 if pe.event.event_type == EventType.SELL and pe.event.event_date.year == year
             ]
         else:
-            sell_events = [pe for pe in self.processed_events if pe.event.event_type == EventType.SELL]
+            sell_events = [
+                pe for pe in self.processed_events if pe.event.event_type == EventType.SELL
+            ]
         if not sell_events:
             html.append("<p><em>No sales transactions found.</em></p>")
 
@@ -444,7 +605,8 @@ class TaxEngine:
             html.append(f"<h3>{i}. Sale on {e.event_date}</h3>")
             html.append("<ul>")
             html.append(
-                f"<li><strong>Sold</strong>: {e.shares:,.0f} shares @ €{e.price_eur:,.4f}</li>"
+                f"<li><strong>Sold</strong>: {e.shares:,.0f} shares @ €{e.price_eur:,.4f} "
+                f"(${e.price_usd:,.2f} × {e.resolved_fx_rate:.4f})</li>"
             )
             html.append(f"<li><strong>Average Cost Basis</strong>: €{avg_cost_used:,.4f}</li>")
             html.append(
@@ -453,17 +615,110 @@ class TaxEngine:
             html.append(
                 f"<li><strong>Realized Gain/Loss</strong>: <strong>€{pe.realized_gain_loss:,.2f}</strong></li>"
             )
+            if evidence:
+                html.append(
+                    f"<li><strong>Evidence</strong>: "
+                    f"<span class='beleg'>{evidence.citation_for(pe)}</span>"
+                    f" — {e.source_citation or 'no source document'}</li>"
+                )
             html.append("</ul>")
+
+        # --- Appendix: how the opening average cost came about -----------------
+        if year is not None and evidence is not None and opening is not None:
+            supporting, _ = relevant_events(self.processed_events, year)
+            html.append("<div class='page-break'></div>")
+            html.append("<h2>Appendix A — Opening Position Derivation</h2>")
+            if not supporting:
+                html.append(
+                    f"<p><em>No shares were held on 01.01.{year}; every share sold in "
+                    f"{year} was also acquired in {year}.</em></p>"
+                )
+            else:
+                html.append(
+                    f"<p>The average cost of €{opening.avg_cost_eur:,.4f} per share carried "
+                    f"into {year} results from the following earlier transactions "
+                    f"(from {supporting[0].event.event_date.isoformat()}, the point at which "
+                    f"the depot was last empty, to 31.12.{year - 1}). "
+                    f"These transactions are <strong>not</strong> taxed in this report; they "
+                    f"are shown only to substantiate the opening cost basis.</p>"
+                )
+                html.append("<table>")
+                html.append(
+                    "<thead><tr><th>Date</th><th>Type</th><th>Shares</th><th>Price (USD)</th>"
+                    "<th>FX Rate</th><th>Price (EUR)</th><th>Portfolio Qty</th>"
+                    "<th>Avg Cost (EUR)</th><th>Beleg</th></tr></thead>"
+                )
+                for pe in supporting:
+                    e = pe.event
+                    shares_sign = "+" if e.event_type != EventType.SELL else "-"
+                    html.append("<tr>")
+                    html.append(f"<td>{e.event_date}</td>")
+                    html.append(f"<td>{e.event_type.value}</td>")
+                    html.append(f"<td>{shares_sign}{e.shares:,.0f}</td>")
+                    html.append(f"<td>${e.price_usd:,.2f}</td>")
+                    html.append(f"<td>{e.resolved_fx_rate:.4f}</td>")
+                    html.append(f"<td>€{e.price_eur:,.4f}</td>")
+                    html.append(f"<td>{pe.total_shares_after:,.0f}</td>")
+                    html.append(f"<td>€{pe.avg_cost_eur_after:,.4f}</td>")
+                    html.append(f"<td class='beleg'>{evidence.citation_for(pe)}</td>")
+                    html.append("</tr>")
+                html.append("</table>")
+
+        # --- Appendix: document index -----------------------------------------
+        if evidence is not None:
+            html.append("<div class='page-break'></div>")
+            html.append("<h2>Appendix B — Document Index (Belegverzeichnis)</h2>")
+            html.append(
+                "<p>Every transaction above is backed by one of the following documents. "
+                "The documents are attached to this report under their Beleg-Nr.</p>"
+            )
+            html.append("<table>")
+            html.append(
+                "<thead><tr><th>Beleg-Nr.</th><th>Document</th><th>Type</th><th>Date(s)</th>"
+                "<th>Transactions</th><th>Role</th></tr></thead>"
+            )
+            for doc in evidence.documents:
+                role = doc.role_long
+                if doc.is_primary and not doc.is_supporting:
+                    role = f"Primary evidence ({evidence.year})"
+                html.append("<tr>")
+                html.append(f"<td class='beleg'>{doc.number}</td>")
+                html.append(f"<td>{doc.name}</td>")
+                html.append(f"<td>{doc.kind}</td>")
+                html.append(f"<td>{doc.date_range}</td>")
+                html.append(f"<td>{doc.event_count}</td>")
+                html.append(f"<td>{role}</td>")
+                html.append("</tr>")
+            html.append("</table>")
+            if evidence.missing:
+                html.append(
+                    "<p class='loss'><strong>Warning:</strong> the following referenced "
+                    "documents were not found on disk and are missing from the bundle: "
+                    + ", ".join(evidence.missing)
+                    + "</p>"
+                )
+            if evidence.undocumented_events:
+                html.append(
+                    f"<p class='loss'><strong>Warning:</strong> "
+                    f"{evidence.undocumented_events} transaction(s) have no source document "
+                    f"recorded and are therefore not covered by the document index.</p>"
+                )
 
         html.append("</body></html>")
         return "".join(html)
 
-    def generate_pdf_report(self, filepath: str, year: int | None = None) -> None:
+    def generate_pdf_report(
+        self,
+        filepath: str,
+        year: int | None = None,
+        evidence: EvidenceIndex | None = None,
+    ) -> None:
         """Generate a PDF tax report using Playwright.
-        
+
         Args:
             filepath: Path where the PDF should be saved.
             year: Optional year filter. If provided, only include that year's data.
+            evidence: Optional document index used to cite source documents.
         """
         try:
             from playwright.sync_api import sync_playwright
@@ -472,7 +727,7 @@ class TaxEngine:
             print("Please install it with: pip install playwright && playwright install")
             return
 
-        html_content = self.generate_html_content(year=year)
+        html_content = self.generate_html_content(year=year, evidence=evidence)
 
         try:
             with sync_playwright() as p:

@@ -31,6 +31,11 @@ class StockEvent:
         price_usd: Price per share in USD
         fx_rate: USD to EUR exchange rate on that day (optional - will be fetched from ECB if None)
         notes: Optional notes for the transaction
+        source_document: Path to the file this event was parsed from (relative to the
+            project root), e.g. "input/rsu/RSU_Confirmation_2025-06-05_<id>.pdf".
+            Used to build the evidence bundle submitted to the Finanzamt.
+        source_reference: Where inside that file the event comes from, e.g.
+            "Sheet 'ESPP', row 12". Empty for single-event documents like RSU PDFs.
     """
 
     event_date: date
@@ -39,6 +44,10 @@ class StockEvent:
     price_usd: Decimal
     fx_rate: Decimal | None = None
     notes: str = ""
+    source_document: str | None = None
+    source_reference: str = ""
+    source_sheet: str | None = None  # worksheet name, for workbook sources
+    source_row: int | None = None  # 1-based worksheet row, for workbook sources
     _fx_rate_resolved: Decimal | None = field(default=None, init=False, repr=False)
 
     @property
@@ -66,6 +75,16 @@ class StockEvent:
     def total_value_eur(self) -> Decimal:
         """Calculate total transaction value in EUR."""
         return (self.shares * self.price_eur).quantize(Decimal("0.0001"), ROUND_HALF_UP)
+
+    @property
+    def source_citation(self) -> str:
+        """Human readable pointer to the underlying document, e.g. for the report."""
+        if not self.source_document:
+            return ""
+        name = self.source_document.rsplit("/", 1)[-1]
+        if self.source_reference:
+            return f"{name} ({self.source_reference})"
+        return name
 
     def __post_init__(self) -> None:
         """Convert numeric fields to Decimal if needed and validate."""

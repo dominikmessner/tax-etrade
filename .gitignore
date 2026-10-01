@@ -17,3 +17,7 @@ input/*
 # Generated reports
 *.pdf
 tax_report_*.md
+
+# Submission bundles (contain personal tax data and copies of the input files)
+output/
+*.zip

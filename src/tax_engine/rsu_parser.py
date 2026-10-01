@@ -77,6 +77,8 @@ def parse_rsu_pdf(pdf_path: Path) -> StockEvent | None:
                 shares=shares,
                 price_usd=price_usd,
                 notes=f"RSU Vest ({pdf_path.name})",
+                source_document=pdf_path.as_posix(),
+                source_reference="Release Confirmation",
             )
 
     except Exception as e:
