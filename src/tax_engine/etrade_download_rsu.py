@@ -7,7 +7,7 @@ benefit type filter.
 
 from pathlib import Path
 
-from .etrade_common import download_confirmations
+from .etrade_common import download_confirmations, run_download
 
 OUTPUT_DIR = Path("input/rsu")
 
@@ -21,5 +21,9 @@ def download_rsu_confirmations() -> None:
     )
 
 
+def main() -> int:
+    return run_download(download_rsu_confirmations)
+
+
 if __name__ == "__main__":
-    download_rsu_confirmations()
+    raise SystemExit(main())

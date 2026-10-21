@@ -6,7 +6,7 @@ import shutil
 from datetime import datetime
 from pathlib import Path
 
-from .etrade_common import SessionError, stockplan_page
+from .etrade_common import DownloadError, run_download, stockplan_page
 
 DOWNLOAD_DIR = Path("input/espp")
 TARGET_FILENAME = "BenefitHistory.xlsx"
@@ -21,30 +21,31 @@ def backup_existing_file(file_path: Path) -> None:
 
 
 def download_benefit_history() -> None:
-    try:
-        with stockplan_page(
-            "benefitHistory", ready=lambda p: p.get_by_role("button", name="Download")
-        ) as page:
-            print("Downloading Benefit History...")
-            try:
-                page.get_by_role("button", name="Download").click()
-                with page.expect_download() as download_info:
-                    page.get_by_role("menuitem", name="Download Expanded").click()
-                download = download_info.value
-                print(f"Download started: {download.suggested_filename}")
+    with stockplan_page(
+        "benefitHistory", ready=lambda p: p.get_by_role("button", name="Download")
+    ) as page:
+        print("Downloading Benefit History...")
+        try:
+            page.get_by_role("button", name="Download").click()
+            with page.expect_download() as download_info:
+                page.get_by_role("menuitem", name="Download Expanded").click()
+            download = download_info.value
+            print(f"Download started: {download.suggested_filename}")
 
-                DOWNLOAD_DIR.mkdir(parents=True, exist_ok=True)
-                target_path = DOWNLOAD_DIR / TARGET_FILENAME
-                backup_existing_file(target_path)
-                download.save_as(target_path)
-                print(f"Successfully saved to {target_path}")
-            except Exception as e:
-                print(f"Error during download: {e}")
+            DOWNLOAD_DIR.mkdir(parents=True, exist_ok=True)
+            target_path = DOWNLOAD_DIR / TARGET_FILENAME
+            backup_existing_file(target_path)
+            download.save_as(target_path)
+            print(f"Successfully saved to {target_path}")
+        except Exception as e:
+            raise DownloadError(f"Benefit History download failed: {e}") from e
 
-            page.wait_for_timeout(2000)
-    except SessionError as e:
-        print(e)
+        page.wait_for_timeout(2000)
+
+
+def main() -> int:
+    return run_download(download_benefit_history)
 
 
 if __name__ == "__main__":
-    download_benefit_history()
+    raise SystemExit(main())

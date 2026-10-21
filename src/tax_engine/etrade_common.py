@@ -37,8 +37,22 @@ BENEFIT_TYPE_SELECTOR = '[data-test-id="stockplanconf.benefittype"]'
 APPLY_FILTER_SELECTOR = '[data-test-id="Filter applybtn"]'
 
 
-class SessionError(RuntimeError):
+class DownloadError(RuntimeError):
+    """A download step did not fetch everything it was supposed to."""
+
+
+class SessionError(DownloadError):
     """The saved E-Trade session is missing, invalid or expired."""
+
+
+def run_download(step: Callable[[], None]) -> int:
+    """Run a download step as a console command and return its exit code."""
+    try:
+        step()
+    except Exception as e:
+        print(f"Download failed: {e}")
+        return 1
+    return 0
 
 
 def history_start_date() -> str:
@@ -147,44 +161,45 @@ def download_confirmations(
     Confirmations page into ``output_dir``.
 
     Files are named ``{prefix}_{YYYY-MM-DD}_{cId}.pdf`` and skipped if already
-    present, so the script is safe to re-run.
+    present, so the script is safe to re-run. Every row is attempted; if any
+    fails, DownloadError is raised at the end.
     """
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    try:
-        with stockplan_page(
-            "stockPlanConfirmations", ready=lambda p: p.locator(BENEFIT_TYPE_SELECTOR)
-        ) as page:
-            apply_history_filter(
-                page, year_select=page.get_by_label("Year"), benefit_type=benefit_type
-            )
-            click_view_all(page)
+    with stockplan_page(
+        "stockPlanConfirmations", ready=lambda p: p.locator(BENEFIT_TYPE_SELECTOR)
+    ) as page:
+        apply_history_filter(page, year_select=page.get_by_label("Year"), benefit_type=benefit_type)
+        click_view_all(page)
 
-            print(f"Scanning for {label} documents...")
-            rows = page.locator("tr").filter(has=page.locator(DOWNLOAD_BUTTON_SELECTOR)).all()
-            print(f"Found {len(rows)} potential documents.")
+        print(f"Scanning for {label} documents...")
+        rows = page.locator("tr").filter(has=page.locator(DOWNLOAD_BUTTON_SELECTOR)).all()
+        print(f"Found {len(rows)} potential documents.")
 
-            for i, row in enumerate(rows):
-                try:
-                    _download_row(page, row, output_dir, filename_prefix)
-                except Exception as e:
-                    print(f"Error processing row {i}: {e}")
-    except SessionError as e:
-        print(e)
+        failures = 0
+        for i, row in enumerate(rows):
+            try:
+                _download_row(page, row, output_dir, filename_prefix)
+            except Exception as e:
+                failures += 1
+                print(f"Error processing row {i}: {e}")
+
+    if failures:
+        raise DownloadError(
+            f"{failures} of {len(rows)} {label} confirmation(s) could not be downloaded"
+        )
 
 
 def _download_row(page: Page, row: Locator, output_dir: Path, filename_prefix: str) -> None:
     row_text = row.inner_text()
     date_match = re.search(r"(\d{2}/\d{2}/\d{4})", row_text)
     if not date_match:
-        print("Could not find a date in row, skipping.")
-        return
+        raise DownloadError(f"no date found in row {row_text[:80]!r}")
 
     try:
         formatted_date = datetime.strptime(date_match.group(1), "%m/%d/%Y").strftime("%Y-%m-%d")
-    except ValueError:
-        print(f"Error parsing date {date_match.group(1)}, skipping.")
-        return
+    except ValueError as e:
+        raise DownloadError(f"unparseable date {date_match.group(1)!r}") from e
 
     print(f"Checking confirmation for {formatted_date}...")
 
@@ -210,11 +225,10 @@ def _download_row(page: Page, row: Locator, output_dir: Path, filename_prefix: s
         print(f"Downloading {file_path.name}...")
         # Fetch via the browser context so the session cookies are sent.
         response = page.context.request.get(pdf_url)
-        if response.ok:
-            file_path.write_bytes(response.body())
-            print(f"Saved to {file_path}")
-        else:
-            print(f"Failed to download PDF: {response.status} {response.status_text}")
+        if not response.ok:
+            raise DownloadError(f"{file_path.name}: HTTP {response.status} {response.status_text}")
+        file_path.write_bytes(response.body())
+        print(f"Saved to {file_path}")
     finally:
         popup.close()
         time.sleep(REQUEST_DELAY_SECONDS)

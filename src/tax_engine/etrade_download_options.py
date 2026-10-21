@@ -7,7 +7,7 @@ type filter.
 
 from pathlib import Path
 
-from .etrade_common import download_confirmations
+from .etrade_common import download_confirmations, run_download
 
 OUTPUT_DIR = Path("input/options")
 
@@ -21,5 +21,9 @@ def download_options_confirmations() -> None:
     )
 
 
+def main() -> int:
+    return run_download(download_options_confirmations)
+
+
 if __name__ == "__main__":
-    download_options_confirmations()
+    raise SystemExit(main())
