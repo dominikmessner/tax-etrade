@@ -1,13 +1,28 @@
+"""
+Run the complete E-Trade download sequence: login, then every data source.
+
+Each download step is independent; a failure in one is reported and the
+remaining steps still run.
+"""
+
 import sys
+from collections.abc import Callable
 
-from tax_engine.etrade_download_espp import download_benefit_history
-from tax_engine.etrade_download_options import download_options_confirmations
-from tax_engine.etrade_download_orders import download_orders
-from tax_engine.etrade_download_rsu import download_rsu_confirmations
-from tax_engine.etrade_login import login
+from .etrade_download_espp import download_benefit_history
+from .etrade_download_options import download_options_confirmations
+from .etrade_download_orders import download_orders
+from .etrade_download_rsu import download_rsu_confirmations
+from .etrade_login import login
+
+DOWNLOAD_STEPS: list[tuple[str, Callable[[], None]]] = [
+    ("Download ESPP History", download_benefit_history),
+    ("Download Orders History", download_orders),
+    ("Download RSU Confirmations", download_rsu_confirmations),
+    ("Download Options Confirmations", download_options_confirmations),
+]
 
 
-def main() -> None:
+def main() -> int:
     print("Starting full download process...")
 
     print("\n=== Step 1: Login ===")
@@ -15,34 +30,23 @@ def main() -> None:
         login()
     except Exception as e:
         print(f"Login failed: {e}")
-        sys.exit(1)
+        return 1
 
-    print("\n=== Step 2: Download ESPP History ===")
-    try:
-        download_benefit_history()
-    except Exception as e:
-        print(f"ESPP download failed: {e}")
+    failures = 0
+    for number, (title, step) in enumerate(DOWNLOAD_STEPS, start=2):
+        print(f"\n=== Step {number}: {title} ===")
+        try:
+            step()
+        except Exception as e:
+            failures += 1
+            print(f"{title} failed: {e}")
 
-    print("\n=== Step 3: Download Orders History ===")
-    try:
-        download_orders()
-    except Exception as e:
-        print(f"Orders download failed: {e}")
-
-    print("\n=== Step 4: Download RSU Confirmations ===")
-    try:
-        download_rsu_confirmations()
-    except Exception as e:
-        print(f"RSU download failed: {e}")
-
-    print("\n=== Step 5: Download Options Confirmations ===")
-    try:
-        download_options_confirmations()
-    except Exception as e:
-        print(f"Options download failed: {e}")
-
+    if failures:
+        print(f"\nCompleted with {failures} failed step(s). See the messages above.")
+        return 1
     print("\nAll tasks completed.")
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())
