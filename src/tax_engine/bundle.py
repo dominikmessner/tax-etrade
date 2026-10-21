@@ -71,7 +71,15 @@ class _PdfRenderer:
 
         self._playwright = sync_playwright().start()
         try:
-            self._browser = self._playwright.chromium.launch()
+            try:
+                self._browser = self._playwright.chromium.launch()
+            except Exception as exc:
+                print(f"Error launching browser: {exc}")
+                print("Attempting to install browsers...")
+                import subprocess
+
+                subprocess.run(["playwright", "install", "chromium"], check=True)
+                self._browser = self._playwright.chromium.launch()
         except Exception:
             self._playwright.stop()
             raise
@@ -189,7 +197,7 @@ def _workbook_extract_html(doc: EvidenceDocument, year: int) -> str | None:
     <h2>{escape(doc.kind)}{sheet_note} · rows used for tax year {year}</h2>
     <table>
       <thead><tr><th>Row</th><th>Tax year</th>{header}</tr></thead>
-      <tbody>{''.join(body)}</tbody>
+      <tbody>{"".join(body)}</tbody>
     </table>
     <p class='muted'>Only the rows referenced by this tax report are shown; the row
     numbers match the original worksheet. Rows marked &quot;{year}&quot; are
@@ -217,7 +225,7 @@ def _cover_html(year: int, evidence: EvidenceIndex, report_name: str, generated:
     <h2>Capital gains documentation for tax year {year}, Austria (KESt / E1kv)</h2>
     <dl class='meta'>
       <dt>Tax year</dt><dd>01.01.{year} – 31.12.{year}</dd>
-      <dt>Compiled on</dt><dd>{generated.strftime('%d.%m.%Y %H:%M')}</dd>
+      <dt>Compiled on</dt><dd>{generated.strftime("%d.%m.%Y %H:%M")}</dd>
       <dt>Contents</dt><dd>{escape(report_name)} + {len(evidence.documents)} documents</dd>
       <dt>Documents</dt><dd>{primary} covering {year} transactions, {supporting}
         covering the opening cost basis{overlap}</dd>

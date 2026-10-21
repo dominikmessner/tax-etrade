@@ -8,6 +8,7 @@ required by Austrian tax law for calculating capital gains on stocks.
 from collections import defaultdict
 from datetime import date
 from decimal import ROUND_HALF_UP, Decimal
+from html import escape
 
 from .evidence import EvidenceIndex, relevant_events
 from .models import (
@@ -561,7 +562,7 @@ class TaxEngine:
             html.append(f"<td>€{pe.avg_cost_eur_after:,.4f}</td>")
             html.append(f"<td>{gl_str}</td>")
             if evidence:
-                html.append(f"<td class='beleg'>{evidence.citation_for(pe)}</td>")
+                html.append(f"<td class='beleg'>{escape(evidence.citation_for(pe))}</td>")
             html.append("</tr>")
 
         if year is not None:
@@ -618,8 +619,8 @@ class TaxEngine:
             if evidence:
                 html.append(
                     f"<li><strong>Evidence</strong>: "
-                    f"<span class='beleg'>{evidence.citation_for(pe)}</span>"
-                    f" — {e.source_citation or 'no source document'}</li>"
+                    f"<span class='beleg'>{escape(evidence.citation_for(pe))}</span>"
+                    f" — {escape(e.source_citation or 'no source document')}</li>"
                 )
             html.append("</ul>")
 
@@ -660,7 +661,7 @@ class TaxEngine:
                     html.append(f"<td>€{e.price_eur:,.4f}</td>")
                     html.append(f"<td>{pe.total_shares_after:,.0f}</td>")
                     html.append(f"<td>€{pe.avg_cost_eur_after:,.4f}</td>")
-                    html.append(f"<td class='beleg'>{evidence.citation_for(pe)}</td>")
+                    html.append(f"<td class='beleg'>{escape(evidence.citation_for(pe))}</td>")
                     html.append("</tr>")
                 html.append("</table>")
 
@@ -682,19 +683,19 @@ class TaxEngine:
                 if doc.is_primary and not doc.is_supporting:
                     role = f"Primary evidence ({evidence.year})"
                 html.append("<tr>")
-                html.append(f"<td class='beleg'>{doc.number}</td>")
-                html.append(f"<td>{doc.name}</td>")
-                html.append(f"<td>{doc.kind}</td>")
-                html.append(f"<td>{doc.date_range}</td>")
+                html.append(f"<td class='beleg'>{escape(doc.number)}</td>")
+                html.append(f"<td>{escape(doc.name)}</td>")
+                html.append(f"<td>{escape(doc.kind)}</td>")
+                html.append(f"<td>{escape(doc.date_range)}</td>")
                 html.append(f"<td>{doc.event_count}</td>")
-                html.append(f"<td>{role}</td>")
+                html.append(f"<td>{escape(role)}</td>")
                 html.append("</tr>")
             html.append("</table>")
             if evidence.missing:
                 html.append(
                     "<p class='loss'><strong>Warning:</strong> the following referenced "
                     "documents were not found on disk and are missing from the bundle: "
-                    + ", ".join(evidence.missing)
+                    + ", ".join(escape(m) for m in evidence.missing)
                     + "</p>"
                 )
             if evidence.undocumented_events:

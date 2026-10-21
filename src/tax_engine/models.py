@@ -8,6 +8,7 @@ from dataclasses import dataclass, field
 from datetime import date
 from decimal import ROUND_HALF_UP, Decimal
 from enum import Enum
+from pathlib import Path
 
 
 class EventType(Enum):
@@ -81,7 +82,7 @@ class StockEvent:
         """Human readable pointer to the underlying document, e.g. for the report."""
         if not self.source_document:
             return ""
-        name = self.source_document.rsplit("/", 1)[-1]
+        name = Path(self.source_document.replace("\\", "/")).name
         if self.source_reference:
             return f"{name} ({self.source_reference})"
         return name

@@ -10,10 +10,19 @@ Key behaviour under test:
 
 from datetime import date
 from decimal import Decimal
+from pathlib import Path
+from unittest.mock import patch
 
+import pandas as pd
 import pytest
 
-from tax_engine.evidence import build_evidence_index, relevant_events
+from tax_engine.bundle import (
+    _safe_name,
+    _workbook_extract_html,
+    _write_index_csv,
+    build_bundle,
+)
+from tax_engine.evidence import EvidenceDocument, build_evidence_index, relevant_events
 from tax_engine.models import EventType, StockEvent
 from tax_engine.tax_engine import TaxEngine
 
@@ -240,3 +249,127 @@ class TestMissingDocuments:
         index = build_evidence_index(engine.processed_events, 2025)
 
         assert index.missing == [absent.as_posix()]
+
+
+class TestBundle:
+    """Tests for bundle helpers and submission bundle assembly."""
+
+    def test_safe_name_sanitizes_unsafe_chars(self):
+        assert (
+            _safe_name("RSU Confirmation: 2025/06/05*?.pdf") == "RSU_Confirmation__2025_06_05__.pdf"
+        )
+        assert _safe_name("   ") == "document"
+
+    def test_workbook_extract_html_filters_rows_and_drops_empty_columns(self, tmp_path):
+        workbook = tmp_path / "BenefitHistory.xlsx"
+        df = pd.DataFrame(
+            {
+                "Record Type": ["Grant", "Purchase", "Purchase"],
+                "Purchase Date": [None, "05-DEC-2023", "05-JUN-2025"],
+                "Purchased Qty.": [None, 50, 20],
+                "Unused Column": [None, None, None],
+            }
+        )
+        with pd.ExcelWriter(workbook) as writer:
+            df.to_excel(writer, sheet_name="ESPP", index=False)
+
+        doc = EvidenceDocument(
+            number="B-003",
+            path=workbook.as_posix(),
+            kind="ESPP Purchase History (Benefit History)",
+            first_date=date(2023, 12, 5),
+            last_date=date(2025, 6, 5),
+            event_count=2,
+            is_primary=True,
+            is_supporting=True,
+            sheet="ESPP",
+            rows=[3, 4],
+            primary_rows=[4],
+        )
+
+        html = _workbook_extract_html(doc, 2025)
+
+        assert html is not None
+        assert "05-DEC-2023" in html
+        assert "05-JUN-2025" in html
+        assert "Grant" not in html
+        assert "Unused Column" not in html
+        assert "earlier" in html
+        assert "<tr class='primary'><td>4</td><td class='role'>2025</td>" in html
+
+    def test_write_index_csv_writes_semicolon_delimited_rows(self, engine_across_years, tmp_path):
+        index = build_evidence_index(engine_across_years.processed_events, 2025)
+        csv_path = tmp_path / "Belegverzeichnis_2025.csv"
+        filed = {RSU_2023: "B-001_RSU_Confirmation_2023-06-05_1.pdf"}
+
+        _write_index_csv(csv_path, index, filed)
+
+        content = csv_path.read_text(encoding="utf-8")
+        assert "Beleg-Nr.;File in bundle;Original document" in content
+        assert "B-001;B-001_RSU_Confirmation_2023-06-05_1.pdf;" in content
+
+    def test_build_bundle_creates_folder_and_zip(self, tmp_path):
+        import pypdfium2 as pdfium
+
+        rsu_pdf = tmp_path / "input" / "rsu" / "vest_2024.pdf"
+        rsu_pdf.parent.mkdir(parents=True)
+        doc = pdfium.PdfDocument.new()
+        doc.new_page(595, 842)
+        with rsu_pdf.open("wb") as handle:
+            doc.save(handle)
+
+        orders_xlsx = tmp_path / "input" / "orders" / "orders.xlsx"
+        orders_xlsx.parent.mkdir(parents=True)
+        pd.DataFrame(
+            {
+                "Execution Date": ["07/01/2025"],
+                "Sold Qty.": [40],
+                "Execution Price": ["$80.00"],
+            }
+        ).to_excel(orders_xlsx, index=False)
+
+        engine = TaxEngine()
+        engine.process_all(
+            [
+                _vest(date(2024, 6, 5), "100", "50.00", rsu_pdf.as_posix()),
+                StockEvent(
+                    event_date=date(2025, 7, 1),
+                    event_type=EventType.SELL,
+                    shares=Decimal("40"),
+                    price_usd=Decimal("80.00"),
+                    fx_rate=Decimal("0.90"),
+                    source_document=orders_xlsx.as_posix(),
+                    source_reference="row 2",
+                    source_row=2,
+                ),
+            ]
+        )
+        evidence = build_evidence_index(engine.processed_events, 2025)
+
+        def fake_render(_self, _html: str, out_path: Path, landscape: bool = False) -> None:
+            pdf = pdfium.PdfDocument.new()
+            pdf.new_page(842 if landscape else 595, 595 if landscape else 842)
+            with out_path.open("wb") as f:
+                pdf.save(f)
+
+        with (
+            patch("tax_engine.bundle._PdfRenderer.__enter__", lambda self: self),
+            patch("tax_engine.bundle._PdfRenderer.__exit__", lambda *args: None),
+            patch("tax_engine.bundle._PdfRenderer.render", fake_render),
+        ):
+            result = build_bundle(
+                engine,
+                2025,
+                evidence,
+                output_dir=tmp_path / "output",
+                make_zip=True,
+            )
+
+        assert result.report_pdf.exists()
+        assert result.merged_pdf is not None and result.merged_pdf.exists()
+        assert result.index_csv is not None and result.index_csv.exists()
+        assert result.zip_file is not None and result.zip_file.exists()
+        assert (result.directory / "README.txt").exists()
+        assert (result.directory / "source_data" / "orders.xlsx").exists()
+        assert len(result.documents) == 2
+        assert result.warnings == []
