@@ -1924,19 +1924,19 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "certifi", specifier = ">=2026.10.19" },
-    { name = "mypy", marker = "extra == 'dev'", specifier = ">=2.4.0" },
+    { name = "certifi", specifier = ">=2024.0.0" },
+    { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.14.0" },
     { name = "openpyxl", specifier = ">=3.1.5" },
     { name = "pandas", specifier = ">=2.3.3" },
-    { name = "pandas-stubs", marker = "extra == 'dev'", specifier = ">=2.3.3.260113" },
-    { name = "pdfplumber", specifier = ">=0.11.10" },
-    { name = "playwright", specifier = ">=1.64.0" },
-    { name = "pre-commit", marker = "extra == 'dev'", specifier = ">=4.6.2" },
-    { name = "pypdfium2", specifier = ">=5.14.0" },
-    { name = "pytest", marker = "extra == 'dev'", specifier = ">=9.1.1" },
-    { name = "requests", specifier = ">=2.34.2" },
-    { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.17.1" },
-    { name = "types-requests", marker = "extra == 'dev'", specifier = ">=2.33.0.20261006" },
+    { name = "pandas-stubs", marker = "extra == 'dev'", specifier = ">=2.2.0" },
+    { name = "pdfplumber", specifier = ">=0.11.8" },
+    { name = "playwright", specifier = ">=1.40.0" },
+    { name = "pre-commit", marker = "extra == 'dev'", specifier = ">=4.0.0" },
+    { name = "pypdfium2", specifier = ">=4.30.0" },
+    { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0.0" },
+    { name = "requests", specifier = ">=2.32.5" },
+    { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.8.0" },
+    { name = "types-requests", marker = "extra == 'dev'", specifier = ">=2.32.0" },
 ]
 provides-extras = ["dev"]
 
