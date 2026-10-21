@@ -3,6 +3,10 @@ Test the tax engine using the sample data example.
 
 This test verifies that the engine produces correct results with the sample data,
 preserving the original example that was in main.py.
+
+The manual-FX sample carries the ECB rates for each date verbatim, so these
+tests are hermetic (no network) yet exercise exactly the numbers the demo
+produces.
 """
 
 from datetime import date
@@ -13,8 +17,23 @@ import pytest
 from tax_engine import (
     TaxEngine,
     create_sample_events_with_ecb_rates,
-    prefetch_ecb_rates,
+    create_sample_events_with_manual_fx,
 )
+
+
+def test_sample_variants_are_equivalent():
+    """The ECB-rate sample must be the manual-FX sample minus the rates."""
+    manual = create_sample_events_with_manual_fx()
+    ecb = create_sample_events_with_ecb_rates()
+
+    assert len(manual) == len(ecb)
+    for m, e in zip(manual, ecb, strict=True):
+        assert m.event_date == e.event_date
+        assert m.event_type == e.event_type
+        assert m.shares == e.shares
+        assert m.price_usd == e.price_usd
+        assert m.fx_rate is not None
+        assert e.fx_rate is None
 
 
 def test_sample_data_with_ecb_rates():
@@ -26,20 +45,17 @@ def test_sample_data_with_ecb_rates():
     - Yearly tax summary
     - Final position state
     """
-    # Create events and fetch ECB rates
-    events = create_sample_events_with_ecb_rates()
-    prefetch_ecb_rates(events)
+    events = create_sample_events_with_manual_fx()
 
     # Process events
     engine = TaxEngine()
     engine.process_all(events)
 
-    # Verify final position state
+    # Verify final position state. The portfolio cost is the exact running
+    # total; shares * rounded avg would be 2883.5163.
     assert engine.state.total_shares == 63
     assert engine.state.avg_cost_eur == pytest.approx(Decimal("45.7701"), abs=Decimal("0.0001"))
-    assert engine.state.total_portfolio_cost_eur == pytest.approx(
-        Decimal("2883.5266"), abs=Decimal("0.0001")
-    )
+    assert engine.state.total_portfolio_cost_eur == Decimal("2883.5270")
 
     # Verify we have processed events for all stock events
     assert len(engine.processed_events) == 13
@@ -113,8 +129,7 @@ def test_sample_data_ledger_output(capsys):
     Test that the ledger output can be printed without errors.
     This ensures the output formatting works correctly.
     """
-    events = create_sample_events_with_ecb_rates()
-    prefetch_ecb_rates(events)
+    events = create_sample_events_with_manual_fx()
 
     engine = TaxEngine()
     engine.process_all(events)

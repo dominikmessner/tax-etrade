@@ -250,20 +250,47 @@ class TestPrefetchECBRates:
             ),
         ]
 
-        # If prefetch only fetches for events without fx_rate,
-        # it should skip this event
-        with patch.object(ECBRateFetcher, "get_rates_bulk") as mock_bulk:
-            mock_bulk.return_value = {}
+        with patch.object(ECBRateFetcher, "get_rates_bulk", return_value={}) as mock_bulk:
             prefetch_ecb_rates(events)
 
-            # Events with explicit fx_rate should not be in the request
-            # The actual filtering is implementation-dependent
+        mock_bulk.assert_not_called()
+        assert events[0].resolved_fx_rate == Decimal("0.82")
 
     def test_prefetch_empty_events(self):
         """Test prefetch with empty events list."""
-        with patch.object(ECBRateFetcher, "get_rates_bulk"):
+        with patch.object(ECBRateFetcher, "get_rates_bulk") as mock_bulk:
             prefetch_ecb_rates([])
-            # Should handle gracefully
+
+        mock_bulk.assert_not_called()
+
+    def test_prefetch_pins_rates_on_events(self):
+        """After prefetch, events resolve without any further fetcher calls."""
+        events = [
+            StockEvent(
+                event_date=date(2021, 5, 17),
+                event_type=EventType.VEST,
+                shares=Decimal("100"),
+                price_usd=Decimal("50.00"),
+            ),
+            StockEvent(
+                event_date=date(2021, 6, 1),
+                event_type=EventType.BUY,
+                shares=Decimal("30"),
+                price_usd=Decimal("45.00"),
+            ),
+        ]
+        rates = {date(2021, 5, 17): Decimal("0.82"), date(2021, 6, 1): Decimal("0.85")}
+
+        with patch.object(ECBRateFetcher, "get_rates_bulk", return_value=rates) as mock_bulk:
+            prefetch_ecb_rates(events)
+
+        mock_bulk.assert_called_once_with([date(2021, 5, 17), date(2021, 6, 1)])
+
+        ECBRateFetcher.clear_cache()
+        with patch.object(ECBRateFetcher, "get_rate") as mock_get_rate:
+            assert events[0].resolved_fx_rate == Decimal("0.82")
+            assert events[1].resolved_fx_rate == Decimal("0.85")
+        mock_get_rate.assert_not_called()
 
 
 class TestECBRateFetcherDateRange:
@@ -291,8 +318,21 @@ class TestECBRateFetcherDateRange:
         # Check the URL that was called
         call_url = mock_urlopen.call_args[0][0]
         assert "2021-05-17" in call_url  # end date
-        # Start date should be ~14 days before
-        assert "2021-05-03" in call_url  # start date (14 days buffer)
+        assert ECBRateFetcher.LOOKBACK_DAYS == 14
+        assert "2021-05-03" in call_url  # start date (LOOKBACK_DAYS before)
+
+    def test_bulk_uses_same_lookback_as_single(self):
+        mock_response = MagicMock()
+        mock_response.read.return_value = ECB_XML_RESPONSE.encode()
+        mock_response.__enter__ = MagicMock(return_value=mock_response)
+        mock_response.__exit__ = MagicMock(return_value=False)
+
+        with patch("urllib.request.urlopen", return_value=mock_response) as mock_urlopen:
+            ECBRateFetcher.get_rates_bulk([date(2021, 5, 17), date(2021, 5, 18)])
+
+        call_url = mock_urlopen.call_args[0][0]
+        assert "startPeriod=2021-05-03" in call_url
+        assert "endPeriod=2021-05-18" in call_url
 
     def test_handles_year_boundary(self):
         """Test rate fetching across year boundary."""

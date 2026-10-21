@@ -721,6 +721,90 @@ class TestFinanzOnlineOutput:
         assert "negative number" in html
 
 
+class TestTaxEngineAccounting:
+    """Tests for internal bookkeeping invariants."""
+
+    def test_yearly_summaries_is_plain_dict(self):
+        """Looking up an unknown year must not create a bogus entry."""
+        engine = TaxEngine()
+        engine.process_event(
+            StockEvent(
+                event_date=date(2021, 5, 17),
+                event_type=EventType.VEST,
+                shares=Decimal("10"),
+                price_usd=Decimal("50.00"),
+                fx_rate=Decimal("0.82"),
+            )
+        )
+        assert engine.get_yearly_summary(2030) is None
+        assert 2030 not in engine.yearly_summaries
+        assert [s.year for s in engine.get_all_yearly_summaries()] == [2021]
+
+    def test_portfolio_cost_is_running_total(self):
+        """total_portfolio_cost_eur must be the exact sum of costs in, minus basis out."""
+        engine = TaxEngine()
+        engine.process_all(
+            [
+                StockEvent(
+                    date(2021, 1, 1),
+                    EventType.VEST,
+                    Decimal("333"),
+                    Decimal("10.01"),
+                    Decimal("0.8237"),
+                ),
+                StockEvent(
+                    date(2021, 2, 1), EventType.SELL, Decimal("100"), Decimal("12"), Decimal("0.83")
+                ),
+                StockEvent(
+                    date(2021, 3, 1),
+                    EventType.BUY,
+                    Decimal("77"),
+                    Decimal("9.99"),
+                    Decimal("0.9123"),
+                ),
+            ]
+        )
+        pe = engine.processed_events
+        expected = pe[0].event.total_value_eur + pe[1].cost_change_eur + pe[2].event.total_value_eur
+        assert engine.state.total_portfolio_cost_eur == expected
+        # The average is derived from the running total, not vice versa.
+        assert engine.state.avg_cost_eur == (expected / engine.state.total_shares).quantize(
+            Decimal("0.0001")
+        )
+
+    def test_processed_event_records_avg_cost_before(self):
+        """A SELL records the basis it was computed against."""
+        engine = TaxEngine()
+        vest = engine.process_event(
+            StockEvent(
+                date(2021, 1, 1), EventType.VEST, Decimal("100"), Decimal("50"), Decimal("0.80")
+            )
+        )
+        sell = engine.process_event(
+            StockEvent(
+                date(2021, 2, 1), EventType.SELL, Decimal("40"), Decimal("60"), Decimal("0.80")
+            )
+        )
+        assert vest.avg_cost_eur_before == Decimal("0")
+        assert sell.avg_cost_eur_before == Decimal("40.0000")
+        assert sell.realized_gain_loss == (Decimal("48") - sell.avg_cost_eur_before) * 40
+
+    def test_html_sale_details_use_recorded_basis(self):
+        engine = TaxEngine()
+        engine.process_all(
+            [
+                StockEvent(
+                    date(2021, 1, 1), EventType.VEST, Decimal("3"), Decimal("10"), Decimal("0.8237")
+                ),
+                StockEvent(
+                    date(2021, 2, 1), EventType.SELL, Decimal("3"), Decimal("12"), Decimal("0.83")
+                ),
+            ]
+        )
+        html = engine.generate_html_content()
+        assert "<strong>Average Cost Basis</strong>: €8.2370" in html
+
+
 class TestTaxEngineEdgeCases:
     """Tests for edge cases and boundary conditions."""
 
