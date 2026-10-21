@@ -13,9 +13,9 @@ import pandas as pd
 from playwright.sync_api import Locator, Page
 
 from .etrade_common import (
-    SessionError,
     apply_history_filter,
     click_view_all,
+    run_download,
     stockplan_page,
 )
 
@@ -108,60 +108,61 @@ def _get_execution_date(row: Locator, order_date: str, page: Page) -> str:
 
 
 def download_orders() -> None:
-    try:
-        with stockplan_page(
-            "orders", ready=lambda p: p.locator('[data-test-id="orders.year"]')
-        ) as page:
-            apply_history_filter(
-                page,
-                year_select=page.locator('[data-test-id="orders.year"]').get_by_label("Year"),
+    with stockplan_page(
+        "orders", ready=lambda p: p.locator('[data-test-id="orders.year"]')
+    ) as page:
+        apply_history_filter(
+            page,
+            year_select=page.locator('[data-test-id="orders.year"]').get_by_label("Year"),
+        )
+        click_view_all(page)
+
+        print("Scraping table data...")
+        rows = page.locator("table[role='table'] tbody tr").all()
+        print(f"Found {len(rows)} rows.")
+
+        data = []
+        for i, row in enumerate(rows):
+            cells = row.locator("td").all()
+            if len(cells) < MIN_CELLS_PER_ROW:
+                continue
+
+            benefit_type = cells[COL_BENEFIT_TYPE].inner_text().strip()
+            order_date = cells[COL_ORDER_DATE].inner_text().strip()
+            sold_qty = cells[COL_SOLD_QTY].inner_text().strip()
+            exec_price = cells[COL_EXEC_PRICE].inner_text().strip()
+
+            print(
+                f"  Row {i + 1}: {benefit_type} {order_date} qty={sold_qty} "
+                "— fetching execution date..."
             )
-            click_view_all(page)
+            execution_date = _get_execution_date(row, order_date, page)
+            if execution_date != order_date:
+                print(f"    Order Date: {order_date}  →  Execution Date: {execution_date}")
 
-            print("Scraping table data...")
-            rows = page.locator("table[role='table'] tbody tr").all()
-            print(f"Found {len(rows)} rows.")
+            data.append(
+                {
+                    "Execution Date": execution_date,
+                    "Order Date": order_date,
+                    "Sold Qty.": sold_qty,
+                    "Execution Price": exec_price,
+                    "Benefit Type": benefit_type,
+                }
+            )
 
-            data = []
-            for i, row in enumerate(rows):
-                cells = row.locator("td").all()
-                if len(cells) < MIN_CELLS_PER_ROW:
-                    continue
+        print(f"Extracted {len(data)} records.")
+        if not data:
+            print("No data found.")
+            return
 
-                benefit_type = cells[COL_BENEFIT_TYPE].inner_text().strip()
-                order_date = cells[COL_ORDER_DATE].inner_text().strip()
-                sold_qty = cells[COL_SOLD_QTY].inner_text().strip()
-                exec_price = cells[COL_EXEC_PRICE].inner_text().strip()
+        OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+        pd.DataFrame(data).to_excel(OUTPUT_FILE, index=False)
+        print(f"Saved orders to {OUTPUT_FILE}")
 
-                print(
-                    f"  Row {i + 1}: {benefit_type} {order_date} qty={sold_qty} "
-                    "— fetching execution date..."
-                )
-                execution_date = _get_execution_date(row, order_date, page)
-                if execution_date != order_date:
-                    print(f"    Order Date: {order_date}  →  Execution Date: {execution_date}")
 
-                data.append(
-                    {
-                        "Execution Date": execution_date,
-                        "Order Date": order_date,
-                        "Sold Qty.": sold_qty,
-                        "Execution Price": exec_price,
-                        "Benefit Type": benefit_type,
-                    }
-                )
-
-            print(f"Extracted {len(data)} records.")
-            if not data:
-                print("No data found.")
-                return
-
-            OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
-            pd.DataFrame(data).to_excel(OUTPUT_FILE, index=False)
-            print(f"Saved orders to {OUTPUT_FILE}")
-    except SessionError as e:
-        print(e)
+def main() -> int:
+    return run_download(download_orders)
 
 
 if __name__ == "__main__":
-    download_orders()
+    raise SystemExit(main())

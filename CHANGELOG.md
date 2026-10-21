@@ -32,7 +32,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Events carry the document, sheet and row they were parsed from
 - Sell events use the execution date instead of the order date
 - The engine can run with any subset of input sources; an ESPP file is no longer required
-- `tax-engine`, `tax-demo` and `tax-download` exit non-zero on failure (no input, unknown year, PDF export failure)
+- `tax-engine` and `tax-demo` exit non-zero on failure (no input, unknown year, unreadable sell order, PDF export failure)
+- `tax-download` and the individual `tax-download-*` commands exit non-zero when the session is missing or expired, or any file fails to download; `tax-download` still runs the remaining steps after a failure
 - E-Trade download scripts share one Playwright module; the spinner wait no longer relies on fixed sleeps
 - CI tests Python 3.10 through 3.13
 

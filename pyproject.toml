@@ -37,10 +37,10 @@ tax-engine = "tax_engine.cli_main:main"
 tax-demo = "tax_engine.cli_demo:main"
 tax-login = "tax_engine.etrade_login:login"
 tax-download = "tax_engine.download_all:main"
-tax-download-espp = "tax_engine.etrade_download_espp:download_benefit_history"
-tax-download-orders = "tax_engine.etrade_download_orders:download_orders"
-tax-download-rsu = "tax_engine.etrade_download_rsu:download_rsu_confirmations"
-tax-download-options = "tax_engine.etrade_download_options:download_options_confirmations"
+tax-download-espp = "tax_engine.etrade_download_espp:main"
+tax-download-orders = "tax_engine.etrade_download_orders:main"
+tax-download-rsu = "tax_engine.etrade_download_rsu:main"
+tax-download-options = "tax_engine.etrade_download_options:main"
 
 [tool.setuptools]
 package-dir = {"" = "src"}
