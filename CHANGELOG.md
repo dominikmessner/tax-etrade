@@ -33,7 +33,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Sell events use the execution date instead of the order date
 - The engine can run with any subset of input sources; an ESPP file is no longer required
 - `tax-engine`, `tax-demo` and `tax-download` exit non-zero on failure (no input, unknown year, PDF export failure)
-- The portfolio cost is tracked as a running total and the moving average is derived from it, removing a small rounding drift between the displayed total and the value used in calculations
 - E-Trade download scripts share one Playwright module; the spinner wait no longer relies on fixed sleeps
 - CI tests Python 3.10 through 3.13
 

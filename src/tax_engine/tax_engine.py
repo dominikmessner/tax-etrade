@@ -77,17 +77,16 @@ class TaxEngine:
         Process a BUY, VEST or EXERCISE event.
 
         Updates the moving average cost basis using the formula:
-        new_avg = (old_total_cost + new_cost) / (old_shares + new_shares)
+        new_avg = (old_shares * old_avg + new_cost) / (old_shares + new_shares)
 
-        ``total_portfolio_cost_eur`` is the single source of truth for the
-        portfolio's cost; the average is derived from it rather than the other
-        way round, so the two can never drift apart through rounding.
+        Gains are computed from the rounded average, so ``total_portfolio_cost_eur``
+        can differ from shares x average by a fraction of a cent.
         """
         avg_before = self.state.avg_cost_eur
         new_cost_eur = event.total_value_eur
         new_shares = event.shares
 
-        new_total_cost = self.state.total_portfolio_cost_eur + new_cost_eur
+        new_total_cost = self.state.total_shares * avg_before + new_cost_eur
         new_total_shares = self.state.total_shares + new_shares
 
         if new_total_shares > 0:

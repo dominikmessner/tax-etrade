@@ -51,11 +51,10 @@ def test_sample_data_with_ecb_rates():
     engine = TaxEngine()
     engine.process_all(events)
 
-    # Verify final position state. The portfolio cost is the exact running
-    # total; shares * rounded avg would be 2883.5163.
+    # Verify final position state
     assert engine.state.total_shares == 63
-    assert engine.state.avg_cost_eur == pytest.approx(Decimal("45.7701"), abs=Decimal("0.0001"))
-    assert engine.state.total_portfolio_cost_eur == Decimal("2883.5270")
+    assert engine.state.avg_cost_eur == Decimal("45.7701")
+    assert engine.state.total_portfolio_cost_eur == Decimal("2883.5266")
 
     # Verify we have processed events for all stock events
     assert len(engine.processed_events) == 13
