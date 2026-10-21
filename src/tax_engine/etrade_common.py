@@ -6,7 +6,6 @@ All scrapers open the same site with the same saved session, apply the same
 that logic once so selector fixes land in one place.
 """
 
-import os
 import re
 import time
 from collections.abc import Callable, Iterator
@@ -20,11 +19,8 @@ from playwright.sync_api import Locator, Page, sync_playwright
 SESSION_FILE = Path("input/etrade_session.json")
 STOCKPLAN_BASE_URL = "https://us.etrade.com/etx/sp/stockplan#/myAccount/"
 
-# E-Trade's "Custom" year filter needs an explicit start date. The default
-# covers the full history of the plan this tool was written for; override it
-# with TAX_ENGINE_HISTORY_START (format MM/DD/YY) for other plans.
-DEFAULT_HISTORY_START = "01/01/19"
-HISTORY_START_ENV = "TAX_ENGINE_HISTORY_START"
+# E-Trade's "Custom" year filter needs an explicit start date (MM/DD/YY).
+HISTORY_START = "01/01/19"
 
 SPINNER_SELECTOR = ".spinner-overlay-spinner"
 PAGE_LOAD_TIMEOUT_MS = 10_000
@@ -53,10 +49,6 @@ def run_download(step: Callable[[], None]) -> int:
         print(f"Download failed: {e}")
         return 1
     return 0
-
-
-def history_start_date() -> str:
-    return os.environ.get(HISTORY_START_ENV, DEFAULT_HISTORY_START)
 
 
 @contextmanager
@@ -119,14 +111,14 @@ def apply_history_filter(
     year_select: Locator,
     benefit_type: str | None = None,
 ) -> None:
-    """Select the "Custom" year range from ``history_start_date()`` and apply it."""
+    """Select the "Custom" year range from ``HISTORY_START`` and apply it."""
     print("Setting filters...")
     year_select.select_option("Custom")
 
     start_date_input = page.get_by_role("textbox", name="Start date (format: MM/DD/YY)")
     start_date_input.click()
     start_date_input.dblclick()  # select any existing text so fill() replaces it
-    start_date_input.fill(history_start_date())
+    start_date_input.fill(HISTORY_START)
 
     if benefit_type is not None:
         page.locator(BENEFIT_TYPE_SELECTOR).get_by_label("Benefit Type").select_option(benefit_type)

@@ -9,42 +9,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- Single-year filing: `--year 2025` limits the calculation and the report to one
-  tax year and builds a submission bundle under `output/Steuerakt_2025/`
-- Submission bundle: every source document behind the filed year, numbered
-  (Beleg-Nr.), plus a merged `Steuerakt_<year>_komplett.pdf`, a CSV index and a ZIP
-- Report cites the Beleg-Nr. of each transaction's source document, and gained an
-  opening position on 1 January, a closing position on 31 December, an appendix
-  deriving the opening average cost, and a document index
-- Printable extracts of the worksheet rows actually used from the ESPP and orders
-  workbooks, marking which rows belong to the filed year
-- `--no-bundle`, `--output-dir`, `--no-zip` and `--input-dir` flags; menu entry 4 in the
-  double-click runner scripts asks for a year and builds the bundle
-- Stock options exercise support: `EXERCISE` events from exercise confirmation PDFs, with same-day sales recorded as `SELL`
-- `tax-download-options` console script
-- `TAX_ENGINE_HISTORY_START` environment variable to override the download start date
-- Documentation of the cost basis used for ESPP and options (FMV) and of the non-deductibility of fees
+- `--year 2025` calculates and reports a single tax year and builds a submission
+  bundle in `output/Steuerakt_2025/`: every source document, numbered, merged into
+  one PDF, plus a CSV index and a ZIP
+- The report shows the opening and closing position of the year and refers to each
+  transaction's source document by its number
+- `--no-bundle`, `--output-dir`, `--no-zip` and `--input-dir` options; menu entry 4
+  builds the bundle for a year you enter
+- Stock options support, including same-day sales, and a `tax-download-options` command
 
 ### Changed
 
-- Transactions after the filed year are ignored, so a problem in newer data cannot
-  abort a run for a year that is already closed
-- Events carry the document, sheet and row they were parsed from
-- Sell events use the execution date instead of the order date
-- The engine can run with any subset of input sources; an ESPP file is no longer required
-- `tax-engine` and `tax-demo` exit non-zero on failure (no input, unknown year, unreadable sell order, PDF export failure)
-- `tax-download` and the individual `tax-download-*` commands exit non-zero when the session is missing or expired, or any file fails to download; `tax-download` still runs the remaining steps after a failure
-- E-Trade download scripts share one Playwright module; the spinner wait no longer relies on fixed sleeps
-- CI tests Python 3.10 through 3.13
+- Sales use the execution date instead of the order date
+- An ESPP file is no longer required; any combination of ESPP, RSU, options and sales works
+- Commands exit with an error code when something fails, e.g. no input data, an
+  expired E-Trade login, a failed download or a failed PDF export
 
 ### Fixed
 
-- A sell order in `orders.xlsx` with an unreadable date, quantity or execution price now stops the run with an error listing every affected row, instead of crashing with a bare `InvalidOperation` (or, for dates and quantities, being silently skipped). Canceled (`--` quantity) and zero-quantity orders are still skipped
-- NaN/inf values in spreadsheet cells are rejected with a readable error
-- Looking up an unknown year no longer inserts a bogus year-0 summary
-- Per-sale calculation details in the PDF use the recorded average cost instead of a value back-derived from the rounded gain
-- Lint and formatting regressions that had left CI red
-- Test suite no longer contacts the ECB API
+- A sale with a missing price, date or quantity stops the run with a list of the
+  affected rows instead of crashing or being left out of the report
+- The per-sale details in the PDF show the exact average cost used for the calculation
 
 ## [0.1.0] - 2026-02-05
 
