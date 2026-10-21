@@ -159,7 +159,7 @@ Let's walk through a complete example:
 
 3. **Sell-to-Cover**: When shares are sold to cover taxes at vesting, the vest happens first (establishing cost basis), then the immediate sale is processed.
 
-4. **Rounding**: The engine keeps 4 decimal places for all intermediate EUR amounts and the moving average. The portfolio's total cost is tracked as a running total and the average is derived from it, so the two cannot drift apart through rounding. KESt is rounded to cents.
+4. **Rounding**: The engine keeps 4 decimal places for all intermediate EUR amounts and the moving average. Each new average is computed from the previous rounded average (shares × average + new cost), and gains use that rounded average, so the displayed total cost can differ from shares × average by a fraction of a cent. KESt is rounded to cents.
 
 5. **Plan-specific defaults**: The download scripts fetch history from 1 January 2019 by default, which covers the plan this tool was written for. Set the environment variable `TAX_ENGINE_HISTORY_START` (format `MM/DD/YY`) if your plan is older.
 

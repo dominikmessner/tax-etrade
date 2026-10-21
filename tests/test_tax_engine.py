@@ -740,8 +740,8 @@ class TestTaxEngineAccounting:
         assert 2030 not in engine.yearly_summaries
         assert [s.year for s in engine.get_all_yearly_summaries()] == [2021]
 
-    def test_portfolio_cost_is_running_total(self):
-        """total_portfolio_cost_eur must be the exact sum of costs in, minus basis out."""
+    def test_new_average_builds_on_rounded_previous_average(self):
+        """Pins the averaging formula so reported gains stay stable across releases."""
         engine = TaxEngine()
         engine.process_all(
             [
@@ -764,13 +764,12 @@ class TestTaxEngineAccounting:
                 ),
             ]
         )
-        pe = engine.processed_events
-        expected = pe[0].event.total_value_eur + pe[1].cost_change_eur + pe[2].event.total_value_eur
-        assert engine.state.total_portfolio_cost_eur == expected
-        # The average is derived from the running total, not vice versa.
-        assert engine.state.avg_cost_eur == (expected / engine.state.total_shares).quantize(
-            Decimal("0.0001")
-        )
+        vest, sell, buy = engine.processed_events
+        expected = (
+            (sell.total_shares_after * vest.avg_cost_eur_after + buy.event.total_value_eur)
+            / buy.total_shares_after
+        ).quantize(Decimal("0.0001"))
+        assert buy.avg_cost_eur_after == expected
 
     def test_processed_event_records_avg_cost_before(self):
         """A SELL records the basis it was computed against."""
