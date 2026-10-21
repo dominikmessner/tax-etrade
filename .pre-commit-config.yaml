@@ -21,4 +21,5 @@ repos:
       - id: mypy
         additional_dependencies:
           - pandas-stubs
+          - pytest
           - types-requests

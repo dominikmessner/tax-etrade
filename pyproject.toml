@@ -40,6 +40,7 @@ tax-download = "tax_engine.download_all:main"
 tax-download-espp = "tax_engine.etrade_download_espp:download_benefit_history"
 tax-download-orders = "tax_engine.etrade_download_orders:download_orders"
 tax-download-rsu = "tax_engine.etrade_download_rsu:download_rsu_confirmations"
+tax-download-options = "tax_engine.etrade_download_options:download_options_confirmations"
 
 [tool.setuptools]
 package-dir = {"" = "src"}
@@ -74,7 +75,9 @@ ignore = [
 known-first-party = ["tax_engine"]
 
 [tool.mypy]
-python_version = "3.12"
+# python_version is intentionally unset: mypy then targets the interpreter it
+# runs under, and CI runs it on every supported version. Pinning it to 3.10
+# makes mypy reject newer third-party stubs that use 3.12-only syntax.
 strict = true
 warn_return_any = true
 warn_unused_ignores = true
@@ -106,3 +109,5 @@ disable_error_code = ["arg-type", "union-attr", "type-arg"]
 testpaths = ["tests"]
 pythonpath = ["src"]
 addopts = "-v --tb=short"
+# Tests must never reach the ECB API; an on-demand FX fetch is a test bug.
+filterwarnings = ["error::tax_engine.models.LazyFxRateWarning"]
