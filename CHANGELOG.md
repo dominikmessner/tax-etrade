@@ -20,7 +20,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- Runtime, development, and tool dependencies are updated to their current releases
 - Sales use the execution date instead of the order date
 - An ESPP file is no longer required; any combination of ESPP, RSU, options and sales works
 - Commands exit with an error code when something fails, e.g. no input data, an
