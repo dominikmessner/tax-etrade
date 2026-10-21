@@ -785,7 +785,7 @@ class TestYearFiltering:
     def _build_multi_year_engine(self):
         """Helper: build an engine with transactions across multiple years."""
         engine = TaxEngine()
-        
+
         # 2020: vest 100 @ $40
         engine.process_event(
             StockEvent(
@@ -796,7 +796,7 @@ class TestYearFiltering:
                 fx_rate=Decimal("0.82"),
             )
         )
-        
+
         # 2021: sell 50 @ $60 (gain), vest 50 @ $50
         engine.process_event(
             StockEvent(
@@ -816,7 +816,7 @@ class TestYearFiltering:
                 fx_rate=Decimal("0.82"),
             )
         )
-        
+
         # 2022: sell 50 @ $20 (loss)
         engine.process_event(
             StockEvent(
@@ -827,34 +827,34 @@ class TestYearFiltering:
                 fx_rate=Decimal("0.82"),
             )
         )
-        
+
         return engine
 
     def test_print_ledger_filters_by_year(self, capsys):
         """print_ledger with year parameter should only show that year's transactions."""
         engine = self._build_multi_year_engine()
-        
+
         engine.print_ledger(year=2021)
         output = capsys.readouterr().out
-        
+
         # Should contain 2021 transactions
         assert "2021-06-15" in output
         assert "2021-08-20" in output
-        
+
         # Should NOT contain 2020 or 2022 transactions
         assert "2020-11-15" not in output
         assert "2022-03-10" not in output
-        
+
         # Should show year in title
         assert "2021" in output
 
     def test_print_ledger_without_year_shows_all(self, capsys):
         """print_ledger without year parameter should show all transactions."""
         engine = self._build_multi_year_engine()
-        
+
         engine.print_ledger()
         output = capsys.readouterr().out
-        
+
         # Should contain all years
         assert "2020-11-15" in output
         assert "2021-06-15" in output
@@ -864,31 +864,31 @@ class TestYearFiltering:
     def test_print_tax_summary_filters_by_year(self, capsys):
         """print_tax_summary with year parameter should only show that year."""
         engine = self._build_multi_year_engine()
-        
+
         engine.print_tax_summary(year=2021)
         output = capsys.readouterr().out
-        
+
         # Should contain 2021 in summary
         lines = output.splitlines()
         year_lines = [line for line in lines if line.strip().startswith("2021")]
         assert len(year_lines) > 0, "Should have 2021 summary line"
-        
+
         # Should NOT contain 2020 or 2022 summary lines
         year_2020_lines = [line for line in lines if line.strip().startswith("2020")]
         year_2022_lines = [line for line in lines if line.strip().startswith("2022")]
         assert len(year_2020_lines) == 0, "Should not have 2020 summary line"
         assert len(year_2022_lines) == 0, "Should not have 2022 summary line"
-        
+
         # Should show year in title
         assert "2021" in output
 
     def test_print_tax_summary_without_year_shows_all(self, capsys):
         """print_tax_summary without year parameter should show all years."""
         engine = self._build_multi_year_engine()
-        
+
         engine.print_tax_summary()
         output = capsys.readouterr().out
-        
+
         # Should contain all years
         assert "2020" in output
         assert "2021" in output
@@ -897,20 +897,20 @@ class TestYearFiltering:
     def test_generate_html_content_filters_by_year(self):
         """generate_html_content with year parameter should only include that year."""
         engine = self._build_multi_year_engine()
-        
+
         html = engine.generate_html_content(year=2021)
-        
+
         # Should contain 2021 in title
         assert "2021" in html
-        
+
         # Should contain 2021 transactions
         assert "2021-06-15" in html
         assert "2021-08-20" in html
-        
+
         # Should NOT contain 2020 or 2022 transactions
         assert "2020-11-15" not in html
         assert "2022-03-10" not in html
-        
+
         # Tax summary table should only have 2021
         # Count occurrences of year markers in table rows
         assert html.count("<td>2021</td>") > 0
@@ -920,15 +920,15 @@ class TestYearFiltering:
     def test_generate_html_content_without_year_shows_all(self):
         """generate_html_content without year parameter should include all years."""
         engine = self._build_multi_year_engine()
-        
+
         html = engine.generate_html_content()
-        
+
         # Should contain all years' transactions
         assert "2020-11-15" in html
         assert "2021-06-15" in html
         assert "2021-08-20" in html
         assert "2022-03-10" in html
-        
+
         # Tax summary should have all years
         assert "<td>2020</td>" in html
         assert "<td>2021</td>" in html
@@ -937,14 +937,14 @@ class TestYearFiltering:
     def test_print_ledger_empty_year(self, capsys):
         """print_ledger with year that has no transactions should show empty ledger."""
         engine = self._build_multi_year_engine()
-        
+
         engine.print_ledger(year=2025)
         output = capsys.readouterr().out
-        
+
         # Should show header with year
         assert "2025" in output
         assert "TRANSACTION LEDGER" in output
-        
+
         # Should not contain any transactions
         assert "2020-11-15" not in output
         assert "2021-06-15" not in output
@@ -953,14 +953,14 @@ class TestYearFiltering:
     def test_print_tax_summary_empty_year(self, capsys):
         """print_tax_summary with year that has no data should show empty summary."""
         engine = self._build_multi_year_engine()
-        
+
         engine.print_tax_summary(year=2025)
         output = capsys.readouterr().out
-        
+
         # Should show header with year
         assert "2025" in output
         assert "YEARLY TAX SUMMARY" in output
-        
+
         # Should not contain any summary rows (no 2025 data exists)
         lines = output.splitlines()
         year_2025_lines = [line for line in lines if line.strip().startswith("2025")]
@@ -969,24 +969,23 @@ class TestYearFiltering:
     def test_year_filtering_preserves_all_data(self):
         """Year filtering should not modify the engine's internal state."""
         engine = self._build_multi_year_engine()
-        
+
         # Get original state
         original_events_count = len(engine.processed_events)
         original_summaries_count = len(engine.yearly_summaries)
-        
+
         # Generate filtered output
         engine.print_ledger(year=2021)
-        html = engine.generate_html_content(year=2021)
-        
+        engine.generate_html_content(year=2021)
+
         # Verify internal state unchanged
         assert len(engine.processed_events) == original_events_count
         assert len(engine.yearly_summaries) == original_summaries_count
-        
+
         # All years should still be accessible
         assert 2020 in engine.yearly_summaries
         assert 2021 in engine.yearly_summaries
         assert 2022 in engine.yearly_summaries
-
 
 
 class TestOpeningAndClosingPosition:

@@ -78,7 +78,7 @@ class EvidenceDocument:
 
 def _classify(path: str, event_type: EventType) -> str:
     """Describe a document by its location and the events it carries."""
-    lowered = path.lower()
+    lowered = path.replace("\\", "/").lower()
     if "/rsu/" in lowered:
         return "RSU Release Confirmation"
     if "/options/" in lowered:

@@ -322,15 +322,14 @@ def main() -> None:
     engine.process_all(events)
 
     # Validate year filter if provided
-    if args.year:
-        if args.year not in engine.yearly_summaries:
-            available_years = sorted(engine.yearly_summaries.keys())
-            print(f"\nError: No data found for year {args.year}")
-            if available_years:
-                print(f"Available years: {', '.join(map(str, available_years))}")
-            else:
-                print("No tax data available (no sales transactions processed)")
-            return
+    if args.year and args.year not in engine.yearly_summaries:
+        available_years = sorted(engine.yearly_summaries.keys())
+        print(f"\nError: No data found for year {args.year}")
+        if available_years:
+            print(f"Available years: {', '.join(map(str, available_years))}")
+        else:
+            print("No tax data available (no sales transactions processed)")
+        return
 
     # Index the documents behind this year's transactions so the report can cite them
     evidence = build_evidence_index(engine.processed_events, args.year) if args.year else None
