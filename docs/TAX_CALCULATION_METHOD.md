@@ -10,10 +10,19 @@ Austrian tax law requires the **Moving Average Cost Basis Method** (German: *Gle
 
 ### 1. Cost Basis (Anschaffungskosten)
 
-The cost basis is the price you paid for your shares, converted to EUR. For:
+The cost basis is the value at which the shares are deemed acquired for capital-gains purposes, converted to EUR. In all three cases this tool uses the **fair market value (FMV) on the acquisition date**:
 
-- **RSU Vesting**: The fair market value (FMV) at the time of vesting
-- **ESPP Purchases**: The purchase price you paid (typically at a discount)
+| Acquisition | Cost basis used | E-Trade source field |
+|-------------|-----------------|----------------------|
+| **RSU Vesting** | FMV at vesting | `Market Value Per Share` (release confirmation PDF) |
+| **ESPP Purchase** | FMV on the purchase date, **not** the discounted price paid | `Purchase Date FMV` (BenefitHistory.xlsx) |
+| **Options Exercise** | FMV at exercise, **not** the strike price | `Exercise Market Value` (exercise confirmation PDF) |
+
+Why FMV rather than the amount actually paid for ESPP and options? The difference between FMV and the price paid (the discount or the option spread) is employment income, not a capital gain. It is either taxed through payroll as a benefit-in-kind (Sachbezug) or exempt under § 3 Abs. 1 Z 15 lit. b EStG. Either way it has already been dealt with in the wage-tax sphere, so the shares enter the depot at FMV and only the movement *after* acquisition is subject to KESt. Using the discounted price instead would tax the discount a second time.
+
+> ⚠️ This is the treatment the author understands to apply to a typical employer plan. Confirm it against your own payroll statements (Lohnzettel) with a tax advisor before filing.
+
+Transaction fees and commissions are **not** added to the cost basis or deducted from proceeds. This is deliberate: under § 27a Abs. 4 Z 2 EStG, incidental acquisition costs (Anschaffungsnebenkosten) and selling costs are not deductible for privately held capital assets taxed at the special 27.5% rate.
 
 ### 2. Moving Average Cost Basis (Gleitender Durchschnittspreis)
 
@@ -35,7 +44,7 @@ Austria taxes capital gains on securities at a flat rate of **27.5%**.
 
 ### Rule A: Acquisitions Update the Average
 
-Every time you acquire shares (RSU vest or ESPP purchase), the average cost is recalculated:
+Every time you acquire shares (RSU vest, ESPP purchase or options exercise), the average cost is recalculated:
 
 **Example:**
 - You hold 100 shares with an average cost of €50 (total cost: €5,000)
@@ -60,19 +69,19 @@ You cannot sell more shares than you currently hold. The engine validates this f
 
 All transactions must be converted to EUR for Austrian tax purposes:
 
-1. **USD to EUR conversion** uses the official ECB (European Central Bank) exchange rate
-2. The rate used is from the **transaction date** (or the closest available rate)
-3. Exchange rates are fetched from the ECB Statistical Data Warehouse
+1. **USD to EUR conversion** uses the official ECB (European Central Bank) reference rate
+2. The rate used is from the **transaction date**; on weekends and holidays the most recent published rate before that date is used
+3. Exchange rates are fetched from the ECB Data Portal API in one request for the whole date range
 
 ## Transaction Processing Order
 
 When multiple transactions occur on the same day, they are processed in this order:
 
 1. **VEST** (RSU vesting)
-2. **BUY** (ESPP purchases)
-3. **SELL** (Stock sales)
+2. **BUY** (ESPP purchases) and **EXERCISE** (options exercises)
+3. **SELL** (Stock sales, including the sale leg of a same-day options exercise)
 
-This ordering is critical for "sell-to-cover" scenarios where shares vest and are immediately sold on the same day to cover taxes.
+This ordering is critical for "sell-to-cover" scenarios where shares vest and are immediately sold on the same day to cover taxes, and for same-day option exercises where the exercise and the sale share a date.
 
 ## Yearly Tax Summary
 
@@ -144,18 +153,21 @@ Let's walk through a complete example:
 
 ## Important Notes
 
-1. **RSU Income Tax**: The FMV at vesting is also taxable as income (Lohnsteuer), but it is already withheld by Dynatrace. This is separate from the capital gains calculated here.
+1. **RSU Income Tax**: The FMV at vesting is also taxable as employment income (Lohnsteuer), which your employer withholds through payroll. This is separate from the capital gains calculated here.
 
-2. **ESPP Discount**: The discount you receive on ESPP purchases is normally taxable as a benefit-in-kind (Sachbezug). However, under **§ 3 Abs. 1 Z 15 lit. b EStG**, if you hold the shares for at least **5 years**, the discount (up to €3,000 per year) can be **tax-free**. Dynatrace's ESPP qualifies for this benefit. The discount taxation is handled by Dynatrace's payroll. This software only calculates capital gains (KESt) when you sell.
+2. **ESPP Discount**: The discount you receive on ESPP purchases is normally taxable as a benefit-in-kind (Sachbezug). However, under **§ 3 Abs. 1 Z 15 lit. b EStG**, if you hold the shares for at least **5 years**, the discount (up to €3,000 per year) can be **tax-free**. Whether your plan qualifies, and the taxation of the discount itself, is handled by your employer's payroll. This software only calculates capital gains (KESt) when you sell; see *Cost Basis* above for how the discount affects the basis.
 
 3. **Sell-to-Cover**: When shares are sold to cover taxes at vesting, the vest happens first (establishing cost basis), then the immediate sale is processed.
 
-4. **Rounding**: The engine uses 4 decimal places for calculations to maintain precision.
+4. **Rounding**: The engine keeps 4 decimal places for all intermediate EUR amounts and the moving average. The portfolio's total cost is tracked as a running total and the average is derived from it, so the two cannot drift apart through rounding. KESt is rounded to cents.
+
+5. **Plan-specific defaults**: The download scripts fetch history from 1 January 2019 by default, which covers the plan this tool was written for. Set the environment variable `TAX_ENGINE_HISTORY_START` (format `MM/DD/YY`) if your plan is older.
 
 ## Legal References
 
 - § 27 EStG (Einkommensteuergesetz) - Capital gains taxation
-- § 27a EStG - Special tax rate for capital income (27.5%)
+- § 27a EStG - Special tax rate for capital income (27.5%); Abs. 4 Z 2 on non-deductible incidental costs; Abs. 4 Z 3 on the moving average for depot holdings
+- § 3 Abs. 1 Z 15 lit. b EStG - Tax-free employee share discount
 - BMF (Bundesministerium für Finanzen) guidelines on cost basis calculation
 
 ## Disclaimer
