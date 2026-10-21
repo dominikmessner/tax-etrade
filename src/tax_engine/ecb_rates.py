@@ -32,6 +32,11 @@ class ECBRateFetcher:
         "?startPeriod={start}&endPeriod={end}&format=structurespecificdata"
     )
 
+    # The ECB publishes rates on TARGET business days only. The longest real
+    # gap is a few days (Christmas/New Year), so this window comfortably covers
+    # any weekend or holiday when looking for the most recent rate before a date.
+    LOOKBACK_DAYS = 14
+
     # Cache for rates (date -> rate)
     _rate_cache: dict[date, Decimal] = {}
 
@@ -83,9 +88,7 @@ class ECBRateFetcher:
         if target_date in cls._rate_cache:
             return cls._rate_cache[target_date]
 
-        # Fetch a range around the target date to handle weekends/holidays
-        # Go back 14 days to handle extended holiday periods (e.g., Christmas + New Year)
-        start_date = target_date - timedelta(days=14)
+        start_date = target_date - timedelta(days=cls.LOOKBACK_DAYS)
         end_date = target_date
 
         rates = cls._fetch_rates_for_period(start_date, end_date)
@@ -115,8 +118,7 @@ class ECBRateFetcher:
         if not dates:
             return {}
 
-        # Find date range
-        min_date = min(dates) - timedelta(days=10)  # Buffer for weekends
+        min_date = min(dates) - timedelta(days=cls.LOOKBACK_DAYS)
         max_date = max(dates)
 
         # Fetch all rates in range
@@ -150,13 +152,19 @@ class ECBRateFetcher:
 
 def prefetch_ecb_rates(events: list["StockEvent"]) -> None:
     """
-    Pre-fetch ECB rates for all events that don't have fx_rate specified.
+    Resolve ECB rates for all events that don't have fx_rate specified.
 
-    This is more efficient than fetching one at a time, as it makes
-    a single API call for the entire date range.
+    Makes a single API call for the entire date range and pins the resolved
+    rate on each event, so later access to ``price_eur`` never touches the
+    network.
     """
-    dates_needed = [e.event_date for e in events if e.fx_rate is None]
-    if dates_needed:
-        print(f"Fetching ECB rates for {len(dates_needed)} dates...")
-        ECBRateFetcher.get_rates_bulk(dates_needed)
-        print("Done.")
+    events_needing_rate = [e for e in events if e.fx_rate is None]
+    if not events_needing_rate:
+        return
+
+    dates_needed = sorted({e.event_date for e in events_needing_rate})
+    print(f"Fetching ECB rates for {len(dates_needed)} dates...")
+    rates = ECBRateFetcher.get_rates_bulk(dates_needed)
+    for event in events_needing_rate:
+        event.set_resolved_fx_rate(rates[event.event_date])
+    print("Done.")

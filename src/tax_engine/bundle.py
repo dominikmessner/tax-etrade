@@ -77,8 +77,11 @@ class _PdfRenderer:
                 print(f"Error launching browser: {exc}")
                 print("Attempting to install browsers...")
                 import subprocess
+                import sys
 
-                subprocess.run(["playwright", "install", "chromium"], check=True)
+                subprocess.run(
+                    [sys.executable, "-m", "playwright", "install", "chromium"], check=True
+                )
                 self._browser = self._playwright.chromium.launch()
         except Exception:
             self._playwright.stop()
