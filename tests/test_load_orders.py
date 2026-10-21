@@ -7,7 +7,8 @@ Key behaviour under test:
 - Falls back to Order Date when Execution Date cell is NaN/empty
 - Skips cancelled orders (Sold Qty. == "--")
 - Skips zero-quantity rows
-- Skips rows without a usable execution price instead of crashing
+- Raises InputDataError for sales with an unreadable date, quantity or price,
+  listing every bad row, rather than silently dropping them
 - Skips Stock Options rows (handled separately via options PDFs)
 - Returns an empty list when the file is missing
 """
@@ -19,7 +20,7 @@ from pathlib import Path
 import pandas as pd
 import pytest
 
-from tax_engine.loaders import load_orders_from_excel
+from tax_engine.loaders import InputDataError, load_orders_from_excel
 from tax_engine.models import EventType
 
 
@@ -75,10 +76,13 @@ class TestExecutionDatePreference:
         events = _load(orders_file, [_base_row(**{"Order Date": "2023-11-09"})])
         assert events[0].event_date == date(2023, 11, 9)
 
-    def test_unparseable_date_row_is_skipped(self, orders_file: Path, capsys) -> None:
-        events = _load(orders_file, [_base_row(**{"Order Date": "next tuesday"}), _base_row()])
-        assert len(events) == 1
-        assert "Error parsing date" in capsys.readouterr().out
+    def test_unparseable_date_raises(self, orders_file: Path) -> None:
+        with pytest.raises(InputDataError, match=r"row 2: unreadable date 'next tuesday'"):
+            _load(orders_file, [_base_row(**{"Order Date": "next tuesday"}), _base_row()])
+
+    def test_unparseable_date_on_cancelled_order_is_skipped(self, orders_file: Path) -> None:
+        events = _load(orders_file, [_base_row(**{"Order Date": "--", "Sold Qty.": "--"})])
+        assert events == []
 
 
 class TestRowFiltering:
@@ -98,16 +102,32 @@ class TestRowFiltering:
         assert events == []
 
     @pytest.mark.parametrize("bad_price", ["--", "", None, "N/A"])
-    def test_skips_rows_without_execution_price(
-        self, orders_file: Path, bad_price: object, capsys
+    def test_sale_without_execution_price_raises(
+        self, orders_file: Path, bad_price: object
     ) -> None:
-        """A blank or placeholder price must skip the row, not raise InvalidOperation."""
-        events = _load(
-            orders_file,
-            [_base_row(**{"Execution Price": bad_price}), _base_row()],
-        )
-        assert len(events) == 1
-        assert "no execution price" in capsys.readouterr().out
+        """Dropping a real sale would understate the gain, so it must not be skipped."""
+        with pytest.raises(InputDataError, match=r"row 2: 86 shares sold but no execution price"):
+            _load(orders_file, [_base_row(**{"Execution Price": bad_price}), _base_row()])
+
+    def test_unparseable_quantity_raises(self, orders_file: Path) -> None:
+        with pytest.raises(InputDataError, match=r"row 2: unreadable Sold Qty\. 'lots'"):
+            _load(orders_file, [_base_row(**{"Sold Qty.": "lots"})])
+
+    def test_error_lists_every_bad_row(self, orders_file: Path) -> None:
+        rows = [
+            _base_row(**{"Execution Price": "--"}),
+            _base_row(),
+            _base_row(**{"Execution Price": ""}),
+        ]
+        with pytest.raises(InputDataError) as exc_info:
+            _load(orders_file, rows)
+        assert "row 2:" in str(exc_info.value)
+        assert "row 4:" in str(exc_info.value)
+        assert "row 3:" not in str(exc_info.value)
+
+    def test_cancelled_order_without_price_is_skipped(self, orders_file: Path) -> None:
+        events = _load(orders_file, [_base_row(**{"Sold Qty.": "--", "Execution Price": "--"})])
+        assert events == []
 
     def test_missing_file_returns_empty_list(self, tmp_path: Path, capsys) -> None:
         events = load_orders_from_excel(tmp_path / "does-not-exist.xlsx")

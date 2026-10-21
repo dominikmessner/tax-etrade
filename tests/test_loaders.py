@@ -13,6 +13,7 @@ import pytest
 from tax_engine.cli_main import main as cli_main
 from tax_engine.loaders import (
     ESPP_FILE,
+    ORDERS_FILE,
     load_all_events,
     load_espp_events_from_excel,
 )
@@ -129,6 +130,18 @@ class TestCliMain:
         assert code == 1
         assert "PDF generation FAILED" in out
         assert "PDF generation complete" not in out
+
+    def test_unreadable_sale_exits_nonzero(self, tmp_path: Path, capsys) -> None:
+        orders = tmp_path / ORDERS_FILE
+        orders.parent.mkdir(parents=True)
+        pd.DataFrame(
+            [{"Order Date": "12/08/2025", "Sold Qty.": "86", "Execution Price": "--"}]
+        ).to_excel(orders, index=False)
+        with patch("sys.argv", ["tax-engine", "--input-dir", str(tmp_path)]):
+            code = cli_main()
+        out = capsys.readouterr().out
+        assert code == 1
+        assert "86 shares sold but no execution price" in out
 
     def test_unknown_year_exits_nonzero(self, tmp_path: Path, capsys) -> None:
         vest = StockEvent(

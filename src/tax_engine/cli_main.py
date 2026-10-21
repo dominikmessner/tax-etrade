@@ -16,6 +16,7 @@ from .loaders import (
     OPTIONS_DIR,
     ORDERS_FILE,
     RSU_DIR,
+    InputDataError,
     load_all_events,
 )
 from .report import (
@@ -72,7 +73,11 @@ def main() -> int:
 
     print_banner(args.year)
 
-    events = load_all_events(args.input_dir)
+    try:
+        events = load_all_events(args.input_dir)
+    except InputDataError as e:
+        print(f"Error: {e}")
+        return EXIT_ERROR
     if not events:
         print(f"Error: no transactions found under {args.input_dir}/")
         print("Expected at least one of:")

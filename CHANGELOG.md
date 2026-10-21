@@ -39,7 +39,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- Blank or `--` execution prices in `orders.xlsx` are skipped instead of crashing with `InvalidOperation`
+- A sell order in `orders.xlsx` with an unreadable date, quantity or execution price now stops the run with an error listing every affected row, instead of crashing with a bare `InvalidOperation` (or, for dates and quantities, being silently skipped). Canceled (`--` quantity) and zero-quantity orders are still skipped
 - NaN/inf values in spreadsheet cells are rejected with a readable error
 - Looking up an unknown year no longer inserts a bogus year-0 summary
 - Per-sale calculation details in the PDF use the recorded average cost instead of a value back-derived from the rounded gain

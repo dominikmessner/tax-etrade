@@ -27,6 +27,10 @@ OPTIONS_DIR = Path("options")
 _MISSING_CELL_MARKERS = ("", "--", "N/A", "nan", "None")
 
 
+class InputDataError(ValueError):
+    """A downloaded file contains a transaction that cannot be used as-is."""
+
+
 def _is_blank(raw: object) -> bool:
     """True for None, NaN/NaT and empty strings as read from a spreadsheet."""
     if raw is None:
@@ -138,13 +142,20 @@ def load_espp_events_from_excel(excel_path: Path) -> list[StockEvent]:
 
 
 def load_orders_from_excel(excel_path: Path) -> list[StockEvent]:
-    """Load sell orders from the orders.xlsx file."""
+    """
+    Load sell orders from the orders.xlsx file.
+
+    Canceled (``--`` quantity) and zero-quantity orders are skipped. Any other
+    row that cannot be parsed is a sale the report would otherwise leave out,
+    understating the realized gain, so it raises InputDataError instead.
+    """
     if not excel_path.exists():
         print(f"Warning: {excel_path} not found. No sell orders loaded.")
         return []
 
     df = pd.read_excel(excel_path)
     events: list[StockEvent] = []
+    problems: list[str] = []
 
     for i, (_, row) in enumerate(df.iterrows()):
         row_num = i + 2  # Excel row number (1-based + header)
@@ -159,27 +170,29 @@ def load_orders_from_excel(excel_path: Path) -> list[StockEvent]:
         raw_date = row.get("Execution Date") if "Execution Date" in row.index else None
         if _is_blank(raw_date):
             raw_date = row.get("Order Date")
-        event_date = _parse_date(raw_date, ("%m/%d/%Y", "%Y-%m-%d"))
-        if event_date is None:
-            print(f"Error parsing date in row #{row_num}: {raw_date!r}")
-            continue
-
         raw_qty = row.get("Sold Qty.")
         if _clean_number(raw_qty) == "--":
             print(f"Skipping row #{row_num}: canceled order")
             continue
         shares = _parse_decimal(raw_qty)
         if shares is None:
-            print(f"Error parsing quantity in row #{row_num}: {raw_qty!r}")
+            problems.append(f"row {row_num}: unreadable Sold Qty. {raw_qty!r}")
             continue
         if shares <= 0:
             print(f"Skipping row #{row_num}: zero quantity")
             continue
 
+        event_date = _parse_date(raw_date, ("%m/%d/%Y", "%Y-%m-%d"))
+        if event_date is None:
+            problems.append(f"row {row_num}: unreadable date {raw_date!r}")
+            continue
+
         raw_price = row.get("Execution Price")
         price_usd = _parse_decimal(raw_price)
         if price_usd is None or price_usd <= 0:
-            print(f"Skipping row #{row_num}: no execution price ({raw_price!r})")
+            problems.append(
+                f"row {row_num}: {shares} shares sold but no execution price {raw_price!r}"
+            )
             continue
 
         events.append(
@@ -195,6 +208,14 @@ def load_orders_from_excel(excel_path: Path) -> list[StockEvent]:
                 # sheet", which is what the loader itself reads.
                 source_row=row_num,
             )
+        )
+
+    if problems:
+        details = "\n".join(f"  {p}" for p in problems)
+        raise InputDataError(
+            f"{excel_path} has sell orders that cannot be read:\n{details}\n"
+            "Fix these rows (or re-run tax-download-orders) before calculating tax; "
+            "skipping them would leave sales out of the report."
         )
 
     return events
