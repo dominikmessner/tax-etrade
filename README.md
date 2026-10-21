@@ -96,8 +96,6 @@ To automate downloading transaction history from E-Trade:
     uv run tax-download-options
     ```
 
-    The download scripts fetch history from 1 January 2019 onwards. If your plan is older, set `TAX_ENGINE_HISTORY_START` (format `MM/DD/YY`) before running them.
-
     The downloads land in `input/`:
 
     | Path | Contents | Required |
