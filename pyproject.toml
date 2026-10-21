@@ -11,24 +11,24 @@ license = "MIT"
 requires-python = ">=3.10"
 keywords = ["tax", "austria", "espp", "rsu", "capital-gains", "kest"]
 dependencies = [
-    "certifi>=2026.10.19",
+    "certifi>=2024.0.0",
     "openpyxl>=3.1.5",
     "pandas>=2.3.3",
-    "pdfplumber>=0.11.10",
-    "playwright>=1.64.0",
+    "pdfplumber>=0.11.8",
+    "playwright>=1.40.0",
     # Used directly to merge the bundle PDFs (also a pdfplumber dependency)
-    "pypdfium2>=5.14.0",
-    "requests>=2.34.2",
+    "pypdfium2>=4.30.0",
+    "requests>=2.32.5",
 ]
 
 [project.optional-dependencies]
 dev = [
-    "mypy>=2.4.0",
-    "pandas-stubs>=2.3.3.260113",
-    "pre-commit>=4.6.2",
-    "pytest>=9.1.1",
-    "ruff>=0.17.1",
-    "types-requests>=2.33.0.20261006",
+    "mypy>=1.14.0",
+    "pandas-stubs>=2.2.0",
+    "pre-commit>=4.0.0",
+    "pytest>=8.0.0",
+    "ruff>=0.8.0",
+    "types-requests>=2.32.0",
 ]
 
 [project.scripts]
