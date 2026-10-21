@@ -6,7 +6,7 @@
 	"postCreateCommand": "uv sync --all-extras && sudo uv run playwright install-deps chromium && uv run playwright install chromium",
 	"runArgs": [ "--cap-add=SYS_PTRACE", "--security-opt", "seccomp=unconfined" ],
 	"features": {
-		"ghcr.io/devcontainers/features/desktop-lite:1.2.8": {
+		"ghcr.io/devcontainers/features/desktop-lite:1.2.10": {
 			"version": "latest",
 			"noVncVersion": "1.6.0",
 			"password": "vscode",
